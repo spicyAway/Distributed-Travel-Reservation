@@ -16,7 +16,6 @@ public class TransactionManager {
     public static long TIMEOUT = 100000;
     private static int xid;
     private static HashMap<Integer, ArrayList<IResourceManager>> activeTransactions;
-    private static HashMap<Integer, String> transaction_results;
     public static Hashtable<Integer, Long> livingTime;
 
     public TransactionManager() {
@@ -25,25 +24,6 @@ public class TransactionManager {
         transaction_results = new HashMap<Integer, String>();
         livingTime = new Hashtable<Integer, Long>();
     }
-
-    public String getResults(int xid) {
-        return transaction_results.get(xid);
-    }
-
-    public void setResults(int xid, String msg) {
-        transaction_results.put(xid, msg);
-    }
-
-    public void addResults(int xid, String msg) {
-        if (!transaction_results.containsKey(xid)) {
-            setResults(xid, msg);
-        } else {
-            String result = transaction_results.get(xid);
-            result += msg + "\n";
-            transaction_results.put(xid, result);
-        }
-    }
-
     public int getXid() {
         return xid;
     }
@@ -60,10 +40,11 @@ public class TransactionManager {
 
     public void addRM(int xid, IResourceManager rm) {
         ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid);
-        relatedRMs.add(rm);
-        activeTransactions.put(xid, relatedRMs);
+        if(!relatedRMs.contains(rm)){
+          relatedRMs.add(rm);
+          activeTransactions.put(xid, relatedRMs);
+        }
     }
-
     public static void Abort(int xid) throws RemoteException, InvalidTransactionException {
         ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid);
         if(relatedRMs != null) {

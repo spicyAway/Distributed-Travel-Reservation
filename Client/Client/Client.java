@@ -99,7 +99,7 @@ public abstract class Client
 					System.out.print("Trying to commit the transaction now" + "\n");
 					boolean result = m_resourceManager.Commit(xid);
 					if (result) {
-						System.out.print("Commit Successfully!");
+						System.out.print("Commit successfully for transaction: " + xid);
 					} else {
 						System.out.print("Commit error!");
 					}
@@ -110,7 +110,7 @@ public abstract class Client
 					checkArgumentsCount(2, arguments.size());
 					int xid = toInt(arguments.elementAt(1));
 					m_resourceManager.Abort(xid);
-					System.out.print("Aborted!");
+					System.out.print("Aborted transaction: " + xid );
 					break;
 				}
 

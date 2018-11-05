@@ -105,22 +105,22 @@ public class RMIMiddleware extends ResourceManager
       String ident = lockKey.substring(0, 3);
       switch(ident){
         case "fli":{
-          System.out.print("ADD FLIGHT MANAGER TO TM" + "\n");
+          System.out.print("ADDED FLIGHT MANAGER TO TM" + "\n");
           tm.addRM(xid, this.getFlightManager());
           break;
         }
         case "roo":{
-          System.out.print("ADD ROOM MANAGER TO TM" + "\n");
+          System.out.print("ADDED ROOM MANAGER TO TM" + "\n");
           tm.addRM(xid, this.getRoomManager());
           break;
         }
         case "car":{
-          System.out.print("ADD CAR MANAGER TO TM" + "\n");
+          System.out.print("ADDED CAR MANAGER TO TM" + "\n");
           tm.addRM(xid, this.getCarManager());
           break;
         }
         case "cus":{
-          System.out.print("ADD ALL MANAGER TO TM" + "\n");
+          System.out.print("ADDED ALL MANAGERS TO TM" + "\n");
           tm.addRM(xid, this.getFlightManager());
           tm.addRM(xid, this.getRoomManager());
           tm.addRM(xid, this.getCarManager());
