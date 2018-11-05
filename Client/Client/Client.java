@@ -109,13 +109,8 @@ public abstract class Client
 				case Abort: {
 					checkArgumentsCount(2, arguments.size());
 					int xid = toInt(arguments.elementAt(1));
-					//TODO: Add abort transaction function to the middleware
-					if (!activeTransactions.contains(xid)) {
-						System.out.print("Transaction does not exist!");
-					} else {
-						m_resourceManager.Abort(xid);
-						System.out.print("Aborted!");
-					}
+					m_resourceManager.Abort(xid);
+					System.out.print("Aborted!");
 					break;
 				}
 

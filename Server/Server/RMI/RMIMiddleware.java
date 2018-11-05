@@ -91,14 +91,42 @@ public class RMIMiddleware extends ResourceManager
         try{
             tm.resetTime(xid);
             boolean lock_result = lm.Lock(xid, lockKey, type);
+            AddManagers(xid, lockKey);
             if (!lock_result) {
-                tm.Abort(xid);
+                Abort(xid);
                 throw new TransactionAbortedException(xid);
             }
         }catch (DeadlockException e) {
-            tm.Abort(xid);
+            Abort(xid);
             throw new TransactionAbortedException(xid);
         }
+    }
+    public void AddManagers(int xid, String lockKey){
+      String ident = lockKey.substring(0, 3);
+      switch(ident){
+        case "fli":{
+          System.out.print("ADD FLIGHT MANAGER TO TM" + "\n");
+          tm.addRM(xid, this.getFlightManager());
+          break;
+        }
+        case "roo":{
+          System.out.print("ADD ROOM MANAGER TO TM" + "\n");
+          tm.addRM(xid, this.getRoomManager());
+          break;
+        }
+        case "car":{
+          System.out.print("ADD CAR MANAGER TO TM" + "\n");
+          tm.addRM(xid, this.getCarManager());
+          break;
+        }
+        case "cus":{
+          System.out.print("ADD ALL MANAGER TO TM" + "\n");
+          tm.addRM(xid, this.getFlightManager());
+          tm.addRM(xid, this.getRoomManager());
+          tm.addRM(xid, this.getCarManager());
+          break;
+        }
+      }
     }
     //For all the following methods, request locks first then perform the operation
     public boolean addFlight(int xid, int flightNum, int flightSeats, int flightPrice)throws RemoteException, TransactionAbortedException, InvalidTransactionException

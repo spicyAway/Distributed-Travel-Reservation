@@ -108,5 +108,4 @@ public class TransactionManager {
     public static void clean_up(int xid) throws RemoteException, InvalidTransactionException {
         Abort(xid);
     }
-
 }
