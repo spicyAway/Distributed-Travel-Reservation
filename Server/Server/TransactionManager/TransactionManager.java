@@ -21,7 +21,6 @@ public class TransactionManager {
     public TransactionManager() {
         xid = 0;
         activeTransactions = new HashMap<Integer, ArrayList<IResourceManager>>();
-        transaction_results = new HashMap<Integer, String>();
         livingTime = new Hashtable<Integer, Long>();
     }
     public int getXid() {
@@ -84,9 +83,5 @@ public class TransactionManager {
             livingTime.put(current_id, System.currentTimeMillis());
         }
         return current_id;
-    }
-
-    public static void clean_up(int xid) throws RemoteException, InvalidTransactionException {
-        Abort(xid);
     }
 }
