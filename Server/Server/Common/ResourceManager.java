@@ -33,28 +33,6 @@ public class ResourceManager implements IResourceManager
 			return null;
 		}
 	}
-
-	// Writes a data item
-	protected void writeData(int xid, String key, RMItem value)
-	{
-		synchronized(m_data) {
-			if(!stable_store.containsKey(xid)){
-				RMHashMap transaction_data = new RMHashMap();
-				stable_store.put(xid, transaction_data);
-			}
-			RMHashMap td = stable_store.get(xid);
-			if(!m_data.containsKey(key)){
-				td.put(key, null);
-			}else{
-				RMItem prev = m_data.get(key);
-				if(!td.containsKey(key)){
-					td.put(key, prev);
-				}
-			}
-			stable_store.put(xid, td);
-			m_data.put(key, value);
-		}
-	}
 	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
 		if(stable_store.containsKey(xid)){
 			stable_store.remove(xid);
@@ -79,8 +57,30 @@ public class ResourceManager implements IResourceManager
 			stable_store.remove(xid);
 		}
 	}
+
 	public int Start() throws RemoteException{return -1;};
 
+	// Writes a data item
+	protected void writeData(int xid, String key, RMItem value)
+	{
+		synchronized(m_data) {
+			if(!stable_store.containsKey(xid)){
+				RMHashMap transaction_data = new RMHashMap();
+				stable_store.put(xid, transaction_data);
+			}
+			RMHashMap td = stable_store.get(xid);
+			if(!m_data.containsKey(key)){
+				td.put(key, null);
+			}else{
+				RMItem prev = m_data.get(key);
+				if(!td.containsKey(key)){
+					td.put(key, prev);
+				}
+			}
+			stable_store.put(xid, td);
+			m_data.put(key, value);
+		}
+	}
 
 	// Remove the item out of storage
 	protected void removeData(int xid, String key)
@@ -92,8 +92,10 @@ public class ResourceManager implements IResourceManager
 			}
 			RMHashMap td = stable_store.get(xid);
 			RMItem prev = m_data.get(key);
-			td.put(key, prev);
-
+			if(!td.containsKey(key)){
+				td.put(key, prev);
+			}
+			stable_store.put(xid, td);
 			m_data.remove(key);
 		}
 	}
