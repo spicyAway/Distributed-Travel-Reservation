@@ -90,6 +90,15 @@ public abstract class Client
 					System.out.print("Your xid is: " + xid + "\n");
 					break;
 				}
+				case Shutdown: {
+					System.out.print("Quit all the servers now." + "\n");
+					try{
+						m_resourceManager.shutdown();
+					}catch(Exception e){
+						System.out.print("All servers shutted down.");
+					}
+					break;
+				}
 				case Commit: {
 					checkArgumentsCount(2, arguments.size());
 					int xid = toInt(arguments.elementAt(1));

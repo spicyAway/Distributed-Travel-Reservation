@@ -6,6 +6,7 @@ public enum Command {
 	Start("Start a new transaction and grab an xid",""),
 	Commit("Commit a transaction with xid", "<xid>"),
 	Abort("Abort a transaction with xid", "<xid>"),
+	Shutdown("Quit all the servers", ""),
 
 	AddFlight("Add a new flight number", "<xid>,<FlightNumber>,<NumberOfSeats>,<PricePerSeat>"),
 	AddCars("Add a new car location", "<xid>,<Location>,<NumberOfCar>,<Price>"),
@@ -60,7 +61,7 @@ public enum Command {
 	{
 		String ret = "Commands supported by the client:\n";
 		for (Command cmd : Command.values())
-		{	 
+		{
 			ret += "\t" + cmd.name() + "\n";
 		}
 		ret += "use help,<CommandName> for more detailed information";
@@ -73,4 +74,4 @@ public enum Command {
 		ret += "Usage: " + name() + "," + m_args;
 		return ret;
 	}
-}             
+}

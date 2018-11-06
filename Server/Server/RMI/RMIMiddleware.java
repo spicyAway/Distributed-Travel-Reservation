@@ -424,5 +424,25 @@ public class RMIMiddleware extends ResourceManager
       }
     }
   }
+  public void shutdown() throws RemoteException{
+    try{
+      this.getFlightManager().shutdown();
+    }catch(Exception e) {
+      System.out.print("Resource Manager - 1 shutted down." + "\n");
+    }
+
+    try{
+      this.getRoomManager().shutdown();
+    }catch(Exception e) {
+      System.out.print("Resource Manager - 2 shutted down." + "\n");
+    }
+    try{
+        this.getCarManager().shutdown();
+    }catch(Exception e) {
+      System.out.print("Resource Manager - 3 shutted down." + "\n");
+    }
+    System.out.print("All Resource Manager shutted down." + "\n");
+    System.exit(1);
+  }
 
 }

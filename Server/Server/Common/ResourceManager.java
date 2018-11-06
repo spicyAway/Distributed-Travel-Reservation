@@ -448,4 +448,13 @@ public class ResourceManager implements IResourceManager
 	{
 		return m_name;
 	}
+
+	public void shutdown() throws RemoteException{
+		// try{
+			System.out.print("Bye~");
+			System.exit(1);
+		// }catch(Exception e){
+		// 	System.out.print("Shutted down.");
+		// }
+	}
 }
