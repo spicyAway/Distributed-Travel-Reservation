@@ -72,8 +72,8 @@ public class ResourceManager implements IResourceManager
 			if(!m_data.containsKey(key)){
 				td.put(key, null);
 			}else{
-				RMItem prev = m_data.get(key);
 				if(!td.containsKey(key)){
+					RMItem prev = m_data.get(key);
 					td.put(key, prev);
 				}
 			}
@@ -91,8 +91,8 @@ public class ResourceManager implements IResourceManager
 				stable_store.put(xid, transaction_data);
 			}
 			RMHashMap td = stable_store.get(xid);
-			RMItem prev = m_data.get(key);
 			if(!td.containsKey(key)){
+				RMItem prev = m_data.get(key);
 				td.put(key, prev);
 			}
 			stable_store.put(xid, td);
@@ -450,11 +450,7 @@ public class ResourceManager implements IResourceManager
 	}
 
 	public void shutdown() throws RemoteException{
-		// try{
 			System.out.print("Bye~");
 			System.exit(1);
-		// }catch(Exception e){
-		// 	System.out.print("Shutted down.");
-		// }
 	}
 }

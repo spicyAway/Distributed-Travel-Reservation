@@ -23,8 +23,8 @@ public class RMIMiddleware extends ResourceManager
   private static String host_ = "localhost";
   private static int port_ = 1099;
   private static String[] types = new String[]{"Flights", "Cars", "Rooms"};
-  private static LockManager lm;
-  private static TransactionManager tm;
+  private LockManager lm;
+  private TransactionManager tm;
 
   //Constructor
   public RMIMiddleware()
@@ -325,6 +325,9 @@ public class RMIMiddleware extends ResourceManager
     return tm.Start();
   }
   public void Abort(int xid)throws RemoteException, InvalidTransactionException{
+    if(!tm.checkAlive(xid)){
+      throw new InvalidTransactionException(xid);
+    }
     tm.Abort(xid);
     lm.UnlockAll(xid);
   }
@@ -428,20 +431,20 @@ public class RMIMiddleware extends ResourceManager
     try{
       this.getFlightManager().shutdown();
     }catch(Exception e) {
-      System.out.print("Resource Manager - 1 shutted down." + "\n");
+      System.out.print("Resource Manager - Flight shutted down." + "\n");
     }
 
     try{
       this.getRoomManager().shutdown();
     }catch(Exception e) {
-      System.out.print("Resource Manager - 2 shutted down." + "\n");
+      System.out.print("Resource Manager - Room shutted down." + "\n");
     }
     try{
         this.getCarManager().shutdown();
     }catch(Exception e) {
-      System.out.print("Resource Manager - 3 shutted down." + "\n");
+      System.out.print("Resource Manager - Car shutted down." + "\n");
     }
-    System.out.print("All Resource Manager shutted down." + "\n");
+    System.out.print("All Resource Managers shutted down." + "\n");
     System.exit(1);
   }
 
