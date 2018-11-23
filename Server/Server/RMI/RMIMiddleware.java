@@ -324,12 +324,14 @@ public class RMIMiddleware extends ResourceManager
   public int Start()throws RemoteException{
     return tm.Start();
   }
-  public void Abort(int xid)throws RemoteException, InvalidTransactionException{
+  public boolean Abort(int xid)throws RemoteException, InvalidTransactionException{
+    boolean result;
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
-    tm.Abort(xid);
+    result = tm.Abort(xid);
     lm.UnlockAll(xid);
+    return result;
   }
   public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
     if(!tm.checkAlive(xid)){

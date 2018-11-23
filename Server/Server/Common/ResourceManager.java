@@ -11,17 +11,55 @@ import java.util.*;
 import java.rmi.RemoteException;
 import java.io.*;
 
+@SuppressWarnings("unchecked")
 public class ResourceManager implements IResourceManager
 {
 	protected String m_name = "";
 	protected RMHashMap m_data = new RMHashMap();
 	protected Map<Integer, RMHashMap> stable_store = new HashMap<Integer, RMHashMap>();
+	protected DiskFile<RMHashMap> dataFile;
+	protected DiskFile<Map<Integer, RMHashMap>> stableStoreFile;
 
 	public ResourceManager(String p_name)
 	{
 		m_name = p_name;
+		dataFile = new DiskFile(m_name, "data");
+		stableStoreFile = new DiskFile(m_name, "stable-store");
+		loadFile();
+	}
+	public boolean loadFile(){
+		try{
+			this.m_data = dataFile.read();
+			this.stable_store = stableStoreFile.read();
+			return true;
+		}catch(IOException | ClassNotFoundException e){
+			System.out.print("%%%%%%%%%%%%Create new disk file now.%%%%%%%%%%%%" + "\n");
+			return saveData() && saveStore();
+		}
+	}
+	public boolean saveData(){
+		try{
+			System.out.print("Writing data to disk file: " + dataFile.filePath + "\n");
+			dataFile.save(m_data);
+			return true;
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Saving data failed :(");
+			return false;
+		}
 	}
 
+	public boolean saveStore(){
+		try{
+			System.out.print("Writing stable store to disk file: " + stableStoreFile.filePath + "\n");
+			stableStoreFile.save(stable_store);
+			return true;
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Saving store failed :(");
+			return false;
+		}
+	}
 	// Reads a data item
 	protected RMItem readData(int xid, String key)
 	{
@@ -40,22 +78,12 @@ public class ResourceManager implements IResourceManager
 		//dummy
 		return true;
 	}
-	public void Abort(int xid) throws RemoteException, InvalidTransactionException{
+	public boolean Abort(int xid) throws RemoteException, InvalidTransactionException{
 		if(stable_store.containsKey(xid)) {
-			RMHashMap transaction_store = stable_store.get(xid);
-			for (String key : transaction_store.keySet()) {
-				if (transaction_store.get(key) == null) {
-					synchronized (m_data) {
-						m_data.remove(key);
-					}
-				} else {
-					synchronized (m_data) {
-						m_data.put(key, transaction_store.get(key));
-					}
-				}
-			}
-			stable_store.remove(xid);
+			m_data = stable_store.remove(xid);
+			return true;
 		}
+		return false;
 	}
 
 	public int Start() throws RemoteException{return -1;};
@@ -69,16 +97,16 @@ public class ResourceManager implements IResourceManager
 				stable_store.put(xid, transaction_data);
 			}
 			RMHashMap td = stable_store.get(xid);
-			if(!m_data.containsKey(key)){
-				td.put(key, null);
-			}else{
-				if(!td.containsKey(key)){
-					RMItem prev = m_data.get(key);
-					td.put(key, prev);
+			if(!td.containsKey(key)){
+				if(!m_data.containsKey(key)){
+					td.put(key, null);
+				}else{
+						RMItem prev = m_data.get(key);
+						td.put(key, prev);
 				}
+				stable_store.put(xid, td);
+				m_data.put(key, value);
 			}
-			stable_store.put(xid, td);
-			m_data.put(key, value);
 		}
 	}
 
@@ -92,11 +120,15 @@ public class ResourceManager implements IResourceManager
 			}
 			RMHashMap td = stable_store.get(xid);
 			if(!td.containsKey(key)){
-				RMItem prev = m_data.get(key);
-				td.put(key, prev);
+				if(!m_data.containsKey(key)){
+					td.put(key, null);
+				}else{
+					RMItem prev = m_data.get(key);
+					td.put(key, prev);
 			}
-			stable_store.put(xid, td);
-			m_data.remove(key);
+				stable_store.put(xid, td);
+				m_data.remove(key);
+			}
 		}
 	}
 

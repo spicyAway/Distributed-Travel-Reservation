@@ -26,7 +26,7 @@ public interface IResourceManager extends Remote
 {
     public boolean Commit(int transactionId) throws RemoteException,
             TransactionAbortedException, InvalidTransactionException;
-    public void Abort(int transactionId) throws RemoteException,
+    public boolean Abort(int transactionId) throws RemoteException,
             InvalidTransactionException;
     //public boolean shutdown() throws RemoteException;
     public int Start() throws RemoteException;
