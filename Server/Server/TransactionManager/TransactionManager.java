@@ -12,11 +12,12 @@ import java.util.Vector;
 import java.util.*;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.concurrent.*;
 
 @SuppressWarnings("unchecked")
 public class TransactionManager {
-
-    public static long TIMEOUT = 100000;
+    public static int RESPONSE_TIMEOUT = 10; //In seconds
+    public static long TIMEOUT = 100000; //In milliseconds
     private static int xid;
     private static HashMap<Integer, Transaction> activeTransactions;
     public static Hashtable<Integer, Long> livingTime;
@@ -32,7 +33,7 @@ public class TransactionManager {
       TIMED_OUT
     }
 
-    private static class Transaction{
+    private static class Transaction implements Serializable {
 
       private Status status;
       private ArrayList<IResourceManager> rms;
@@ -43,7 +44,7 @@ public class TransactionManager {
       }
     }
 
-    public TransactionManager() {
+    public TransactionManager(){
         xid = 0;
         activeTransactions = new HashMap<Integer, Transaction>();
         livingTime = new Hashtable<Integer, Long>();
@@ -105,24 +106,49 @@ public class TransactionManager {
         return true;
     }
     public boolean Commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+        Transaction currentT = activeTransactions.get(xid);
+        // if(currentT.status != Status.IN_PREPARE || currentT.status != Status.IN_COMMIT){
+        //   throw new InvalidTransactionException(xid, currentT.status.name());
+        // }
+        System.out.print("Start to commit now. " + "\n");
+        //Save to disk performed in this method
+        setStatus(xid, Status.IN_COMMIT);
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        boolean result = true;
         ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid).rms;
         for (IResourceManager rm : relatedRMs) {
-            rm.Commit(xid);
+          try{
+            Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+                @Override
+                public Boolean call() throws Exception {
+                  System.out.print("Sending VOTE-REQ to RM: " + rm.getName());
+                  return rm.Commit(xid);
+                }
+            });
+            result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
+          }catch(Exception e){
+            result = false;
+            break;
+          }
         }
-        activeTransactions.remove(xid);
-        synchronized (livingTime) {
-            livingTime.remove(xid);
+        if(result){
+          setStatus(xid, Status.COMMITED);
+        }else{
+          setStatus(xid, Status.IN_COMMIT);
         }
-        return true;
+        // activeTransactions.remove(xid);
+        // synchronized (livingTime) {
+        //     livingTime.remove(xid);
+        // }
+        return result;
     }
     public int Start() {
-        int xid = getXid();
-        setXid(xid + 1);
-        int current_id = xid + 1;
+        xid++;
+        activeTransactions.put(xid, new Transaction());
         synchronized (livingTime) {
-            livingTime.put(current_id, System.currentTimeMillis());
+            livingTime.put(xid, System.currentTimeMillis());
         }
-        return current_id;
+        return xid;
     }
     public Status getStatus(int xid){
       if(checkAlive(xid)){
@@ -151,12 +177,12 @@ public class TransactionManager {
     public boolean checkAlive(int id) {
         return activeTransactions.containsKey(id);
     }
-
-    public void setXid(int id) {
-        xid = id;
-        ArrayList<IResourceManager> relatedRMs = new ArrayList<IResourceManager>();
-        activeTransactions.get(id).rms = relatedRMs;
-    }
+    //
+    // public void setXid(int id) {
+    //     xid = id;
+    //     ArrayList<IResourceManager> relatedRMs = new ArrayList<IResourceManager>();
+    //     activeTransactions.get(id).rms = relatedRMs;
+    // }
     public void resetTime(int xid) {
         synchronized (livingTime) {
             livingTime.put(xid, System.currentTimeMillis());

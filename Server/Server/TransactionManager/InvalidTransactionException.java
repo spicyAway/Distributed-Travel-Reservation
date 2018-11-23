@@ -8,9 +8,15 @@ public class InvalidTransactionException extends Exception
 
     public InvalidTransactionException(int xid)
     {
-        super("The transaction " + xid + " is Invalid.");
+        super("The transaction " + xid + " is Invalid." + "\n");
         m_xid = xid;
     }
+    public InvalidTransactionException(int xid, String status)
+    {
+        super("Wrong status detected for tarnsaction:  " + xid + " Status: " + status + "\n");
+        m_xid = xid;
+    }
+
 
     public int getXId()
     {
