@@ -24,6 +24,8 @@ import java.util.*;
 
 public interface IResourceManager extends Remote
 {
+    public boolean Prepare(int xid)throws RemoteException,
+            TransactionAbortedException, InvalidTransactionException;
     public boolean Commit(int transactionId) throws RemoteException,
             TransactionAbortedException, InvalidTransactionException;
     public boolean Abort(int transactionId) throws RemoteException,

@@ -33,7 +33,7 @@ public class ResourceManager implements IResourceManager
 			this.stable_store = stableStoreFile.read();
 			return true;
 		}catch(IOException | ClassNotFoundException e){
-			System.out.print("%%%%%%%%%%%%Create new disk file now.%%%%%%%%%%%%" + "\n");
+			System.out.print("------------Create new disk file now.-------------" + "\n");
 			return saveData() && saveStore();
 		}
 	}
@@ -84,6 +84,10 @@ public class ResourceManager implements IResourceManager
 			return true;
 		}
 		return false;
+	}
+	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+			System.out.print("CONTAIN MA? : " + stable_store.containsKey(xid));
+			return stable_store.containsKey(xid);
 	}
 
 	public int Start() throws RemoteException{return -1;};

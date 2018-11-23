@@ -333,11 +333,14 @@ public class RMIMiddleware extends ResourceManager
     lm.UnlockAll(xid);
     return result;
   }
+  public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+    return tm.Prepare(xid);
+  }
   public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
-    return tm.Commit(xid) && lm.UnlockAll(xid);
+    return tm.Prepare(xid) && lm.UnlockAll(xid);
   }
   public static void main(String args[]) throws RemoteException
   {

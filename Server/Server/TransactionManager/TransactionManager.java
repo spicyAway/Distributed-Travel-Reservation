@@ -70,8 +70,10 @@ public class TransactionManager {
               resetTime(ts.getKey());
               break;
             case IN_PREPARE:
-            case IN_COMMIT:
               Prepare(ts.getKey());
+              break;
+            case IN_COMMIT:
+              Commit(ts.getKey());
               break;
             case IN_ABORT:
               Abort(ts.getKey());
@@ -80,16 +82,50 @@ public class TransactionManager {
               break;
           }
         }
-      }catch(InvalidTransactionException ive){
-        System.out.print("Found invalid transaction!");
+      }catch(InvalidTransactionException|TransactionAbortedException ive){
+        System.out.print("Found invalid or aborted transaction!");
       }
       catch(IOException | ClassNotFoundException e){
         System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
         save();
       }
     }
-    public boolean Prepare(int xid)throws RemoteException, InvalidTransactionException{
-      return true;
+    public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+      Transaction currentT = activeTransactions.get(xid);
+      System.out.print("Preparing now... " + "\n");
+      // if(currentT.status != Status.ACTIVE || currentT.status != Status.IN_PREPARE){
+      //   throw new InvalidTransactionException(xid, currentT.status.name());
+      // }
+      setStatus(xid, Status.IN_PREPARE);
+      ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid).rms;
+      ExecutorService executorService = Executors.newSingleThreadExecutor();
+      boolean result = true;
+      for (IResourceManager rm : relatedRMs) {
+        try{
+          Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+              @Override
+              public Boolean call() throws Exception {
+                System.out.print("Sending PREPARE-REQ to RM: " + rm.getName() + "\n");
+                return rm.Prepare(xid);
+              }
+          });
+          if(!future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS)){
+            System.out.print("Received NO from: " + rm.getName());
+            result = false;
+            break;
+          }
+        }catch(Exception e){
+          result = false;
+          break;
+        }
+      }
+      if(result){
+        return Commit(xid);
+      }else{
+        setStatus(xid, Status.ACTIVE);
+      }
+      executorService.shutdown();
+      return result;
     }
 
     public static boolean Abort(int xid) throws RemoteException, InvalidTransactionException {
@@ -121,7 +157,7 @@ public class TransactionManager {
             Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
                 @Override
                 public Boolean call() throws Exception {
-                  System.out.print("Sending VOTE-REQ to RM: " + rm.getName());
+                  System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
                   return rm.Commit(xid);
                 }
             });
@@ -133,13 +169,13 @@ public class TransactionManager {
         }
         if(result){
           setStatus(xid, Status.COMMITED);
+          synchronized (livingTime) {
+              livingTime.remove(xid);
+          }
         }else{
           setStatus(xid, Status.IN_COMMIT);
         }
-        // activeTransactions.remove(xid);
-        // synchronized (livingTime) {
-        //     livingTime.remove(xid);
-        // }
+        executorService.shutdown();
         return result;
     }
     public int Start() {
