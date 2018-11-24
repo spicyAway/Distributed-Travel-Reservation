@@ -19,14 +19,28 @@ public class ResourceManager implements IResourceManager
 	protected Map<Integer, RMHashMap> pre_images = new HashMap<Integer, RMHashMap>();
 	protected DiskFile<RMHashMap> dataFile;
 	protected DiskFile<Map<Integer, RMHashMap>> imagesFile;
+	public CrashManager cm;
 
 	public ResourceManager(String p_name)
 	{
 		m_name = p_name;
 		dataFile = new DiskFile(m_name, "data");
 		imagesFile = new DiskFile(m_name, "pre-images");
+		cm = new CrashManager();
 		loadFile();
 	}
+	public void resetCrashes() throws RemoteException{
+		this.cm.resetCrashes();
+	}
+	public void crashResourceManager(String name, int mode) throws RemoteException{
+		if(name == m_name){
+			this.cm.mode = mode;
+		}
+	}
+	public void crashMiddleware(int mode) throws RemoteException{
+		//dummy;
+	}
+
 	public boolean loadFile(){
 		try{
 			this.m_data = dataFile.read();

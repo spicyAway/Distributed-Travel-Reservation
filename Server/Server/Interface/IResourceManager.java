@@ -24,6 +24,9 @@ import java.util.*;
 
 public interface IResourceManager extends Remote
 {
+    public void crashResourceManager(String name, int mode) throws RemoteException;
+    public void crashMiddleware(int mode) throws RemoteException;
+    public void resetCrashes() throws RemoteException;
     public boolean Prepare(int xid)throws RemoteException,
             TransactionAbortedException, InvalidTransactionException;
     public boolean Commit(int transactionId) throws RemoteException,

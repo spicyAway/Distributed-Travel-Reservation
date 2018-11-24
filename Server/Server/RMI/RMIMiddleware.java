@@ -28,6 +28,7 @@ public class RMIMiddleware extends ResourceManager
   private LockManager lm;
   private TransactionManager tm;
   private DiskFile<LockManager> lmFile;
+  public CoordinatorCrashManager ccm;
 
   //Constructor
   public RMIMiddleware()
@@ -36,9 +37,20 @@ public class RMIMiddleware extends ResourceManager
     this.managers = new HashMap<String, IResourceManager>();
     this.lm = new LockManager();
     this.tm = new TransactionManager();
+    this.ccm = new CoordinatorCrashManager();
     this.lmFile = new DiskFile<LockManager>(RMIMiddleware.mw_name, "Locks");
     boolean load_result = loadLocks();
     System.out.print("LOADED LOCKS? " + load_result + "\n");
+  }
+
+  public void resetCrashes() throws RemoteException{
+    this.ccm.mode = -1;
+  }
+  public void crashMiddleware(int mode) throws RemoteException{
+    this.ccm.mode = mode;
+  }
+  public void crashResourceManager(String name, int mode) throws RemoteException{
+    this.managers.get(name).crashResourceManager(name, mode);
   }
 
   //Connect to the resource managers provided by the user
