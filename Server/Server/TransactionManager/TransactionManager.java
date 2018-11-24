@@ -92,12 +92,12 @@ public class TransactionManager {
     }
     public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
       Transaction currentT = activeTransactions.get(xid);
-      System.out.print("Preparing now... " + "\n");
-      // if(currentT.status != Status.ACTIVE || currentT.status != Status.IN_PREPARE){
-      //   throw new InvalidTransactionException(xid, currentT.status.name());
-      // }
+      System.out.print("Preparing transaction with id:  " + xid + "\n");
+      if(currentT.status != Status.ACTIVE && currentT.status != Status.IN_PREPARE){
+        throw new InvalidTransactionException(xid, currentT.status.name());
+      }
       setStatus(xid, Status.IN_PREPARE);
-      ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid).rms;
+      ArrayList<IResourceManager> relatedRMs = currentT.rms;
       ExecutorService executorService = Executors.newSingleThreadExecutor();
       boolean result = true;
       for (IResourceManager rm : relatedRMs) {
@@ -128,30 +128,57 @@ public class TransactionManager {
       return result;
     }
 
-    public static boolean Abort(int xid) throws RemoteException, InvalidTransactionException {
-        ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid).rms;
-        if(relatedRMs != null) {
-            for (IResourceManager rm : relatedRMs) {
-                rm.Abort(xid);
-            }
+    public boolean Abort(int xid) throws RemoteException, InvalidTransactionException {
+
+        Transaction currentT = activeTransactions.get(xid);
+        if(currentT.status != Status.ACTIVE && currentT.status != Status.IN_ABORT){
+          throw new InvalidTransactionException(xid, currentT.status.name());
         }
-        activeTransactions.remove(xid);
+        System.out.print("Start to abort transaction with id: " + xid + "\n");
+        setStatus(xid, Status.IN_ABORT);
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        boolean result = true;
+        ArrayList<IResourceManager> relatedRMs = currentT.rms;
+
+        for (IResourceManager rm : relatedRMs) {
+          try{
+            Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+                @Override
+                public Boolean call() throws Exception {
+                  System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
+                  return rm.Abort(xid);
+                }
+            });
+            result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
+        }catch(Exception e){
+          result = false;
+          break;
+        }
+      }
+      if(result){
+        setStatus(xid, Status.ABORTED);
         synchronized (livingTime) {
             livingTime.remove(xid);
         }
-        return true;
-    }
+      }else{
+        setStatus(xid, Status.IN_ABORT);
+      }
+      executorService.shutdown();
+      return result;
+  }
     public boolean Commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+
         Transaction currentT = activeTransactions.get(xid);
-        // if(currentT.status != Status.IN_PREPARE || currentT.status != Status.IN_COMMIT){
-        //   throw new InvalidTransactionException(xid, currentT.status.name());
-        // }
-        System.out.print("Start to commit now. " + "\n");
+        if(currentT.status != Status.IN_PREPARE && currentT.status != Status.IN_COMMIT){
+          throw new InvalidTransactionException(xid, currentT.status.name());
+        }
+        System.out.print("Start to commit transaction with id: " + xid + "\n");
         //Save to disk performed in this method
         setStatus(xid, Status.IN_COMMIT);
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
-        ArrayList<IResourceManager> relatedRMs = activeTransactions.get(xid).rms;
+
+        ArrayList<IResourceManager> relatedRMs = currentT.rms;
         for (IResourceManager rm : relatedRMs) {
           try{
             Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
@@ -195,6 +222,7 @@ public class TransactionManager {
     private void setStatus(int xid, Status new_status){
       if(checkAlive(xid)){
         activeTransactions.get(xid).status = new_status;
+        System.out.print("****Logged transaction " + xid + " with status: " + new_status.name() + "\n");
         save();
       }
     }

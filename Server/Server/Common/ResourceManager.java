@@ -72,22 +72,30 @@ public class ResourceManager implements IResourceManager
 		}
 	}
 	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+		System.out.print("Received COMMIT-REQ." + "\n");
 		if(stable_store.containsKey(xid)){
 			stable_store.remove(xid);
+			Save();
 		}
 		//dummy
+		System.out.print("Commited Transaction with id: " + xid + "\n");
 		return true;
 	}
 	public boolean Abort(int xid) throws RemoteException, InvalidTransactionException{
+		System.out.print("Received ABORT-REQ." + "\n");
 		if(stable_store.containsKey(xid)) {
 			m_data = stable_store.remove(xid);
-			return true;
+			Save();
 		}
-		return false;
+		System.out.print("Aborted Transaction with id: " + xid + "\n");
+		return true;
 	}
 	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
-			System.out.print("CONTAIN MA? : " + stable_store.containsKey(xid));
+			System.out.print("Received VOTE-REQ." + "\n");
 			return stable_store.containsKey(xid);
+	}
+	public boolean Save(){
+		return saveData() && saveStore();
 	}
 
 	public int Start() throws RemoteException{return -1;};
@@ -112,6 +120,7 @@ public class ResourceManager implements IResourceManager
 				m_data.put(key, value);
 			}
 		}
+		Save();
 	}
 
 	// Remove the item out of storage
@@ -134,6 +143,7 @@ public class ResourceManager implements IResourceManager
 				m_data.remove(key);
 			}
 		}
+		Save();
 	}
 
 	// Deletes the encar item
