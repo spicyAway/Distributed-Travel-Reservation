@@ -45,9 +45,15 @@ public class RMIMiddleware extends ResourceManager
 
   public void resetCrashes() throws RemoteException{
     this.ccm.mode = -1;
+    System.out.print("****DEBUG CRASH MODE: " + this.ccm.mode + "\n");
+    this.getCarManager().resetCrashes();
+    this.getRoomManager().resetCrashes();
+    this.getFlightManager().resetCrashes();
   }
+
   public void crashMiddleware(int mode) throws RemoteException{
     this.ccm.mode = mode;
+    System.out.print("*****DEBUG CRASH MODE: " + this.ccm.mode);
   }
   public void crashResourceManager(String name, int mode) throws RemoteException{
     this.managers.get(name).crashResourceManager(name, mode);

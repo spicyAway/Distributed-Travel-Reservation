@@ -31,11 +31,11 @@ public class ResourceManager implements IResourceManager
 	}
 	public void resetCrashes() throws RemoteException{
 		this.cm.resetCrashes();
+		System.out.print("****DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashResourceManager(String name, int mode) throws RemoteException{
-		if(name == m_name){
-			this.cm.mode = mode;
-		}
+		this.cm.mode = mode;
+		System.out.print("****DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashMiddleware(int mode) throws RemoteException{
 		//dummy;
