@@ -16,25 +16,25 @@ public class ResourceManager implements IResourceManager
 {
 	protected String m_name = "";
 	protected RMHashMap m_data = new RMHashMap();
-	protected Map<Integer, RMHashMap> stable_store = new HashMap<Integer, RMHashMap>();
+	protected Map<Integer, RMHashMap> pre_images = new HashMap<Integer, RMHashMap>();
 	protected DiskFile<RMHashMap> dataFile;
-	protected DiskFile<Map<Integer, RMHashMap>> stableStoreFile;
+	protected DiskFile<Map<Integer, RMHashMap>> imagesFile;
 
 	public ResourceManager(String p_name)
 	{
 		m_name = p_name;
 		dataFile = new DiskFile(m_name, "data");
-		stableStoreFile = new DiskFile(m_name, "stable-store");
+		imagesFile = new DiskFile(m_name, "pre-images");
 		loadFile();
 	}
 	public boolean loadFile(){
 		try{
 			this.m_data = dataFile.read();
-			this.stable_store = stableStoreFile.read();
+			this.pre_images = imagesFile.read();
 			return true;
 		}catch(IOException | ClassNotFoundException e){
-			System.out.print("------------Create new disk file now.-------------" + "\n");
-			return saveData() && saveStore();
+			System.out.print("------Create new disk file: Data and Images now.-------" + "\n");
+			return saveData() && saveImages();
 		}
 	}
 	public boolean saveData(){
@@ -49,14 +49,14 @@ public class ResourceManager implements IResourceManager
 		}
 	}
 
-	public boolean saveStore(){
+	public boolean saveImages(){
 		try{
-			System.out.print("Writing stable store to disk file: " + stableStoreFile.filePath + "\n");
-			stableStoreFile.save(stable_store);
+			System.out.print("Writing pre-images to disk file: " + imagesFile.filePath + "\n");
+			imagesFile.save(pre_images);
 			return true;
 		}catch(IOException e){
 			e.printStackTrace();
-			System.out.print("Saving store failed :(");
+			System.out.print("Saving images failed :(");
 			return false;
 		}
 	}
@@ -73,8 +73,8 @@ public class ResourceManager implements IResourceManager
 	}
 	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
 		System.out.print("Received COMMIT-REQ." + "\n");
-		if(stable_store.containsKey(xid)){
-			stable_store.remove(xid);
+		if(pre_images.containsKey(xid)){
+			pre_images.remove(xid);
 			Save();
 		}
 		//dummy
@@ -83,8 +83,8 @@ public class ResourceManager implements IResourceManager
 	}
 	public boolean Abort(int xid) throws RemoteException, InvalidTransactionException{
 		System.out.print("Received ABORT-REQ." + "\n");
-		if(stable_store.containsKey(xid)) {
-			m_data = stable_store.remove(xid);
+		if(pre_images.containsKey(xid)) {
+			m_data = pre_images.remove(xid);
 			Save();
 		}
 		System.out.print("Aborted Transaction with id: " + xid + "\n");
@@ -92,10 +92,10 @@ public class ResourceManager implements IResourceManager
 	}
 	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
 			System.out.print("Received VOTE-REQ." + "\n");
-			return stable_store.containsKey(xid);
+			return pre_images.containsKey(xid);
 	}
 	public boolean Save(){
-		return saveData() && saveStore();
+		return saveData() && saveImages();
 	}
 
 	public int Start() throws RemoteException{return -1;};
@@ -104,11 +104,11 @@ public class ResourceManager implements IResourceManager
 	protected void writeData(int xid, String key, RMItem value)
 	{
 		synchronized(m_data) {
-			if(!stable_store.containsKey(xid)){
+			if(!pre_images.containsKey(xid)){
 				RMHashMap transaction_data = new RMHashMap();
-				stable_store.put(xid, transaction_data);
+				pre_images.put(xid, transaction_data);
 			}
-			RMHashMap td = stable_store.get(xid);
+			RMHashMap td = pre_images.get(xid);
 			if(!td.containsKey(key)){
 				if(!m_data.containsKey(key)){
 					td.put(key, null);
@@ -116,7 +116,7 @@ public class ResourceManager implements IResourceManager
 						RMItem prev = m_data.get(key);
 						td.put(key, prev);
 				}
-				stable_store.put(xid, td);
+				pre_images.put(xid, td);
 				m_data.put(key, value);
 			}
 		}
@@ -127,11 +127,11 @@ public class ResourceManager implements IResourceManager
 	protected void removeData(int xid, String key)
 	{
 		synchronized(m_data) {
-			if(!stable_store.containsKey(xid)){
+			if(!pre_images.containsKey(xid)){
 				RMHashMap transaction_data = new RMHashMap();
-				stable_store.put(xid, transaction_data);
+				pre_images.put(xid, transaction_data);
 			}
-			RMHashMap td = stable_store.get(xid);
+			RMHashMap td = pre_images.get(xid);
 			if(!td.containsKey(key)){
 				if(!m_data.containsKey(key)){
 					td.put(key, null);
@@ -139,7 +139,7 @@ public class ResourceManager implements IResourceManager
 					RMItem prev = m_data.get(key);
 					td.put(key, prev);
 			}
-				stable_store.put(xid, td);
+				pre_images.put(xid, td);
 				m_data.remove(key);
 			}
 		}

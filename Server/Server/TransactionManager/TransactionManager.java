@@ -39,7 +39,6 @@ public class TransactionManager {
       private ArrayList<IResourceManager> rms;
 
       Transaction(){
-        this.status = Status.ACTIVE;
         this.rms = new ArrayList<IResourceManager>();
       }
     }
@@ -208,6 +207,7 @@ public class TransactionManager {
     public int Start() {
         xid++;
         activeTransactions.put(xid, new Transaction());
+        setStatus(xid, Status.ACTIVE);
         synchronized (livingTime) {
             livingTime.put(xid, System.currentTimeMillis());
         }

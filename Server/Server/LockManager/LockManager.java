@@ -4,8 +4,10 @@ import Server.Common.*;
 
 import java.util.BitSet;
 import java.util.Vector;
+import java.io.IOException;
+import java.io.Serializable;
 
-public class LockManager
+public class LockManager implements Serializable
 {
 	private static int TABLE_SIZE = 2039;
 	private static int DEADLOCK_TIMEOUT = 10000;
@@ -18,7 +20,6 @@ public class LockManager
 	{
 		super();
 	}
-
 	public boolean Lock(int xid, String data, TransactionLockObject.LockType lockType) throws DeadlockException
 	{
 		// if any parameter is invalid, then return false

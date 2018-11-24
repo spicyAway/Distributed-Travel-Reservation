@@ -12,6 +12,8 @@ import java.rmi.registry.Registry;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.io.IOException;
+import java.io.Serializable;
 
 public class RMIMiddleware extends ResourceManager
 {
@@ -25,14 +27,18 @@ public class RMIMiddleware extends ResourceManager
   private static String[] types = new String[]{"Flights", "Cars", "Rooms"};
   private LockManager lm;
   private TransactionManager tm;
+  private DiskFile<LockManager> lmFile;
 
   //Constructor
   public RMIMiddleware()
   {
     super(mw_name);
-    managers = new HashMap<String, IResourceManager>();
-    lm = new LockManager();
-    tm = new TransactionManager();
+    this.managers = new HashMap<String, IResourceManager>();
+    this.lm = new LockManager();
+    this.tm = new TransactionManager();
+    this.lmFile = new DiskFile<LockManager>(RMIMiddleware.mw_name, "Locks");
+    boolean load_result = loadLocks();
+    System.out.print("LOADED LOCKS? " + load_result + "\n");
   }
 
   //Connect to the resource managers provided by the user
@@ -55,6 +61,27 @@ public class RMIMiddleware extends ResourceManager
         e.printStackTrace();
         System.exit(1);
       }
+    }
+  }
+  public boolean loadLocks(){
+    try{
+      this.lm = this.lmFile.read();
+      return true;
+    }catch(IOException | ClassNotFoundException e){
+      System.out.print("------Create new disk file: Locks now.-------" + "\n");
+      return saveLocks();
+    }
+  }
+
+  public boolean saveLocks(){
+    try{
+      System.out.print("^^^^^^^Logged Lock Manager^^^^^^^" + "\n");
+      this.lmFile.save(this.lm);
+      return true;
+    }catch(IOException e){
+      e.printStackTrace();
+      System.out.print("Lock Manager save file failed." + "\n");
+      return false;
     }
   }
   //Echo from the active Resource Managers
@@ -90,7 +117,8 @@ public class RMIMiddleware extends ResourceManager
     }
     try{
       tm.resetTime(xid);
-      boolean lock_result = lm.Lock(xid, lockKey, type);
+      boolean lock_result = this.lm.Lock(xid, lockKey, type);
+      saveLocks();
       AddManagers(xid, lockKey);
       if (!lock_result) {
         Abort(xid);
@@ -101,6 +129,7 @@ public class RMIMiddleware extends ResourceManager
       throw new TransactionAbortedException(xid);
     }
   }
+
   public void AddManagers(int xid, String lockKey){
     String ident = lockKey.substring(0, 3);
     switch(ident){
@@ -331,6 +360,7 @@ public class RMIMiddleware extends ResourceManager
     }
     result = tm.Abort(xid);
     lm.UnlockAll(xid);
+    saveLocks();
     return result;
   }
   public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
@@ -340,7 +370,7 @@ public class RMIMiddleware extends ResourceManager
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
-    return tm.Prepare(xid) && lm.UnlockAll(xid);
+    return tm.Prepare(xid) && lm.UnlockAll(xid) && saveLocks();
   }
   public static void main(String args[]) throws RemoteException
   {
