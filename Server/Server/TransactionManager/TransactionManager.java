@@ -22,6 +22,7 @@ public class TransactionManager {
     private static HashMap<Integer, Transaction> activeTransactions;
     public static Hashtable<Integer, Long> livingTime;
     private static DiskFile<HashMap<Integer, Transaction>> savedTransactions;
+    public CoordinatorCrashManager ccm;
 
     public static enum Status{
       ACTIVE,
@@ -47,6 +48,7 @@ public class TransactionManager {
         xid = 0;
         activeTransactions = new HashMap<Integer, Transaction>();
         livingTime = new Hashtable<Integer, Long>();
+        ccm = new CoordinatorCrashManager();
         savedTransactions = new DiskFile(RMIMiddleware.mw_name, "savedTransactions");
         loadFile();
     }
@@ -92,6 +94,9 @@ public class TransactionManager {
     public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
       Transaction currentT = activeTransactions.get(xid);
       System.out.print("Preparing transaction with id:  " + xid + "\n");
+      //Crash before sending vote request
+      ccm.before_vote();
+
       if(currentT.status != Status.ACTIVE && currentT.status != Status.IN_PREPARE){
         throw new InvalidTransactionException(xid, currentT.status.name());
       }
@@ -104,15 +109,22 @@ public class TransactionManager {
           Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
               @Override
               public Boolean call() throws Exception {
-                System.out.print("Sending PREPARE-REQ to RM: " + rm.getName() + "\n");
+                System.out.print("Sending VOTE-REQ to RM: " + rm.getName() + "\n");
                 return rm.Prepare(xid);
               }
           });
+          //Crash after sending vote request and before receiving any replies
+          ccm.after_vote_before_rec();
+
+          //Crash after receiving some replies but not all
+          ccm.rec_some_rep();
           if(!future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS)){
             System.out.print("Received NO from: " + rm.getName());
             result = false;
             break;
           }
+          //Crash after receiving all replies but before deciding
+          ccm.rec_all_before_dec();
         }catch(Exception e){
           result = false;
           break;
@@ -135,6 +147,9 @@ public class TransactionManager {
         }
         System.out.print("Start to abort transaction with id: " + xid + "\n");
         setStatus(xid, Status.IN_ABORT);
+        //Crash after deciding but before sending decision
+        ccm.after_dec_before_send();
+
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
         ArrayList<IResourceManager> relatedRMs = currentT.rms;
@@ -148,9 +163,14 @@ public class TransactionManager {
                     return rm.Abort(xid);
                   }
               });
+              //Crash after sending some but not all decisions
+              ccm.send_some_dec();
+              //Crash after having sent all decisions
+              ccm.after_send_all_dec();
               result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
           }catch(Exception e){
-            e.printStackTrace();
+            System.out.print("One of the Resource Manager crashes! Please wait." + "\n");
+            resetTime(xid);
             result = false;
             break;
           }

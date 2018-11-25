@@ -123,7 +123,7 @@ public class ResourceManager implements IResourceManager
 					public void run() {
 						cm.after_sending();
 					}
-				}, 100);
+				}, 1);
 			return result;
 	}
 	public boolean Save(){
