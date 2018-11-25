@@ -138,20 +138,22 @@ public class TransactionManager {
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
         ArrayList<IResourceManager> relatedRMs = currentT.rms;
-
-        for (IResourceManager rm : relatedRMs) {
-          try{
-            Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-                @Override
-                public Boolean call() throws Exception {
-                  System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
-                  return rm.Abort(xid);
-                }
-            });
-            result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
-        }catch(Exception e){
-          result = false;
-          break;
+        if(relatedRMs.size() > 0){
+          for (IResourceManager rm : relatedRMs) {
+            try{
+              Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+                  @Override
+                  public Boolean call() throws Exception {
+                    System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
+                    return rm.Abort(xid);
+                  }
+              });
+              result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
+          }catch(Exception e){
+            e.printStackTrace();
+            result = false;
+            break;
+          }
         }
       }
       if(result){

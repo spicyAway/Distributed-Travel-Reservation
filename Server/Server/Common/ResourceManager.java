@@ -10,6 +10,8 @@ import Server.TransactionManager.*;
 import java.util.*;
 import java.rmi.RemoteException;
 import java.io.*;
+import java.util.Timer;
+import java.util.TimerTask;
 
 @SuppressWarnings("unchecked")
 public class ResourceManager implements IResourceManager
@@ -87,6 +89,8 @@ public class ResourceManager implements IResourceManager
 	}
 	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
 		System.out.print("Received COMMIT-REQ." + "\n");
+		//!!!!!!!!!!!!!!!!Crash after receiving decision but before committing/aborting
+		cm.after_rec_before_operate();
 		if(pre_images.containsKey(xid)){
 			pre_images.remove(xid);
 			Save();
@@ -97,6 +101,8 @@ public class ResourceManager implements IResourceManager
 	}
 	public boolean Abort(int xid) throws RemoteException, InvalidTransactionException{
 		System.out.print("Received ABORT-REQ." + "\n");
+		//!!!!!!!!!!!!!!!!Crash after receiving decision but before committing/aborting
+		cm.after_rec_before_operate();
 		if(pre_images.containsKey(xid)) {
 			m_data = pre_images.remove(xid);
 			Save();
@@ -105,8 +111,20 @@ public class ResourceManager implements IResourceManager
 		return true;
 	}
 	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+			//!!!!!!!!!!!!!!!Crash after receive vote request but before sending answer
 			System.out.print("Received VOTE-REQ." + "\n");
-			return pre_images.containsKey(xid);
+			cm.rec_req_before_send();
+			//!!!!!!!!!!!!!!Crash after decigin which answer to send (commit/abort)(YES/NO)
+			boolean result = pre_images.containsKey(xid);
+			cm.after_decision();
+			//!!!!!!!!!!!!!!Crash after sending answer
+			new Timer().schedule(new TimerTask() {
+					@Override
+					public void run() {
+						cm.after_sending();
+					}
+				}, 100);
+			return result;
 	}
 	public boolean Save(){
 		return saveData() && saveImages();

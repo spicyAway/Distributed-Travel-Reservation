@@ -464,13 +464,15 @@ public class RMIMiddleware extends ResourceManager
   //Check if any transactions should be timed out
   public void countingTime()throws RemoteException, TransactionAbortedException, InvalidTransactionException {
     while (true) {
-      if(tm.livingTime.isEmpty()){
-        continue;
-      }
-      for (Integer id : tm.livingTime.keySet()) {
-        if (System.currentTimeMillis() > tm.livingTime.get(id) + tm.TIMEOUT) {
-          Abort(id);
-          System.out.print("Time-out Transaction " + id + "\n");
+      synchronized(tm.livingTime){
+        if(tm.livingTime.isEmpty()){
+          continue;
+        }
+        for (Integer id : tm.livingTime.keySet()) {
+          if (System.currentTimeMillis() > tm.livingTime.get(id) + tm.TIMEOUT) {
+            Abort(id);
+            System.out.print("Time-out Transaction " + id + "\n");
+          }
         }
       }
       try {
