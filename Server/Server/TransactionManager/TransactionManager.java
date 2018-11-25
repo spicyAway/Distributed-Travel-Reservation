@@ -196,6 +196,9 @@ public class TransactionManager {
         System.out.print("Start to commit transaction with id: " + xid + "\n");
         //Save to disk performed in this method
         setStatus(xid, Status.IN_COMMIT);
+        //Crash after deciding but before sending decision
+        ccm.after_dec_before_send();
+        
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
 
@@ -209,6 +212,11 @@ public class TransactionManager {
                   return rm.Commit(xid);
                 }
             });
+            //Crash after sending some but not all decisions
+            ccm.send_some_dec();
+            //Crash after having sent all decisions
+            ccm.after_send_all_dec();
+
             result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
           }catch(Exception e){
             result = false;
