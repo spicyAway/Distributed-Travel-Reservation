@@ -15,8 +15,11 @@ public class DiskFile <T> implements Serializable{
    protected File file;
    public String filePath;
 
+   public DiskFile(){
+     //dummy
+   }
    public DiskFile(String resourceManager, String fileName){
-     this.filePath = dir + "/" + resourceManager + "/" + fileName + ".txt";
+     this.filePath = dir + "/" + resourceManager + "/datafiles/" + fileName + ".txt";
      this.file = new File(filePath);
    }
 

@@ -1,8 +1,9 @@
 package Server.LockManager;
+import java.io.Serializable;
 
 import java.util.Date;
 
-public class TimeObject extends TransactionObject
+public class TimeObject extends TransactionObject implements Serializable
 {
 	private Date m_date = new Date();
 

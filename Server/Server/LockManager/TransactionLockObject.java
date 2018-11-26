@@ -1,6 +1,7 @@
 package Server.LockManager;
+import java.io.Serializable;
 
-public class TransactionLockObject extends TransactionObject
+public class TransactionLockObject extends TransactionObject implements Serializable
 {
 	public enum LockType {
 		LOCK_READ,
@@ -11,7 +12,7 @@ public class TransactionLockObject extends TransactionObject
 	protected String m_data = null;
 	protected LockType m_lockType = LockType.LOCK_UNKNOWN;
 
-	// The data members inherited are 
+	// The data members inherited are
 	// TransactionObject::protected int m_xid = 0;
 
 	TransactionLockObject()
@@ -35,7 +36,7 @@ public class TransactionLockObject extends TransactionObject
 
 	public boolean equals(Object t)
 	{
-		if (t == null) { 
+		if (t == null) {
 			return false;
 		}
 		if (t instanceof TransactionLockObject) {

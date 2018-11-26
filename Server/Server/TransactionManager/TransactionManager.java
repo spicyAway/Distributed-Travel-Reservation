@@ -18,19 +18,19 @@ import java.util.concurrent.*;
 public class TransactionManager {
     public static int RESPONSE_TIMEOUT = 10; //In seconds
     public static long TIMEOUT = 100000; //In milliseconds
-    private static int xid;
+    public static int xid;
     private static HashMap<Integer, Transaction> activeTransactions;
     public static Hashtable<Integer, Long> livingTime;
-    private static DiskFile<HashMap<Integer, Transaction>> savedTransactions;
+    private static LogFile<HashMap<Integer, Transaction>> log_Transactions;
     public CoordinatorCrashManager ccm;
 
     public static enum Status{
       ACTIVE,
       IN_PREPARE,
       IN_COMMIT,
+      IN_ABORT,
       COMMITED,
       ABORTED,
-      IN_ABORT,
       TIMED_OUT
     }
 
@@ -49,12 +49,12 @@ public class TransactionManager {
         activeTransactions = new HashMap<Integer, Transaction>();
         livingTime = new Hashtable<Integer, Long>();
         ccm = new CoordinatorCrashManager();
-        savedTransactions = new DiskFile(RMIMiddleware.mw_name, "savedTransactions");
+        log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
         loadFile();
     }
     public void save(){
       try{
-        savedTransactions.save(activeTransactions);
+        log_Transactions.save(activeTransactions);
       }catch(IOException e){
         e.printStackTrace();
         System.out.print("Transaction Manager save file failed." + "\n");
@@ -62,7 +62,7 @@ public class TransactionManager {
     }
     public void loadFile(){
       try{
-        HashMap<Integer, Transaction> savedData = savedTransactions.read();
+        HashMap<Integer, Transaction> savedData = (HashMap<Integer, Transaction>) log_Transactions.read();
         for(Entry<Integer, Transaction> ts: savedData.entrySet()){
           xid = Math.max(xid, ts.getKey());
           activeTransactions.put(ts.getKey(), ts.getValue());
@@ -198,7 +198,7 @@ public class TransactionManager {
         setStatus(xid, Status.IN_COMMIT);
         //Crash after deciding but before sending decision
         ccm.after_dec_before_send();
-        
+
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
 

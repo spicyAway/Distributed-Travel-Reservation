@@ -1,6 +1,7 @@
 package Server.LockManager;
+import java.io.Serializable;
 
-public class DataLockObject extends TransactionLockObject
+public class DataLockObject extends TransactionLockObject implements Serializable
 {
 	// The data members inherited are
 	// TransactionObject:: protected int xid;

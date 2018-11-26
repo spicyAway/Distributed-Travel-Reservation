@@ -16,63 +16,144 @@ import java.util.TimerTask;
 @SuppressWarnings("unchecked")
 public class ResourceManager implements IResourceManager
 {
+	//Main memory
 	protected String m_name = "";
-	protected RMHashMap m_data = new RMHashMap();
-	protected Map<Integer, RMHashMap> pre_images = new HashMap<Integer, RMHashMap>();
-	protected DiskFile<RMHashMap> dataFile;
-	protected DiskFile<Map<Integer, RMHashMap>> imagesFile;
+	protected RMHashMap m_data;
+	protected Boolean mp;
+	protected Map<Integer, P_Transaction> pre_images;
 	public CrashManager cm;
+
+	//Files wrote into disk
+	protected DiskFile<RMHashMap> dataT;
+	protected DiskFile<RMHashMap> dataF;
+	protected DiskFile<Boolean> master_file;
+	protected LogFile<RMHashMap> log_data;
+	protected LogFile<Map<Integer, P_Transaction>> log_images;
+
+
+	public static enum P_Status{
+		ACTIVE,
+		VOTED_YES,
+		VOTED_NO,
+		REC_COMMIT,
+		REC_ABORT,
+		COMMITED,
+		ABORTED
+	}
+
+	private static class P_Transaction implements Serializable{
+		private P_Status status;
+		private RMHashMap pre_image;
+		P_Transaction(){
+			this.status = P_Status.ACTIVE;
+			this.pre_image = new RMHashMap();
+		}
+	}
 
 	public ResourceManager(String p_name)
 	{
+		//Main memory
+		m_data = new RMHashMap();
+		pre_images = new HashMap<Integer, P_Transaction>();
 		m_name = p_name;
-		dataFile = new DiskFile(m_name, "data");
-		imagesFile = new DiskFile(m_name, "pre-images");
+		mp = true;
 		cm = new CrashManager();
-		loadFile();
+
+		//Files
+		dataT = new DiskFile(m_name, "dataT");
+		dataF = new DiskFile(m_name, "dataF");
+		master_file = new DiskFile(m_name, "Master-Record");
+		//Logs
+		log_data = new LogFile(m_name, "Logged-Data");
+		log_images = new LogFile(m_name, "Logged-Images");
+
+		loadData();
+		loadMaster();
 	}
 	public void resetCrashes() throws RemoteException{
 		this.cm.resetCrashes();
-		System.out.print("****DEBUG CRASH MODE: " + this.cm.mode + "\n");
+		System.out.print("DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashResourceManager(String name, int mode) throws RemoteException{
 		this.cm.mode = mode;
-		System.out.print("****DEBUG CRASH MODE: " + this.cm.mode + "\n");
+		System.out.print("DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashMiddleware(int mode) throws RemoteException{
 		//dummy;
 	}
 
-	public boolean loadFile(){
+	public boolean loadData(){
 		try{
-			this.m_data = dataFile.read();
-			this.pre_images = imagesFile.read();
+			this.m_data = (RMHashMap) log_data.read();
+			this.pre_images = (Map<Integer, P_Transaction>) log_images.read();
 			return true;
 		}catch(IOException | ClassNotFoundException e){
-			System.out.print("------Create new disk file: Data and Images now.-------" + "\n");
-			return saveData() && saveImages();
+			System.out.print("---Create new log file: Data now.---" + "\n");
+			return log();
 		}
 	}
-	public boolean saveData(){
+	public boolean loadMaster(){
 		try{
-			System.out.print("Writing data to disk file: " + dataFile.filePath + "\n");
-			dataFile.save(m_data);
+			this.mp = (Boolean) master_file.read();
 			return true;
-		}catch(IOException e){
-			e.printStackTrace();
-			System.out.print("Saving data failed :(");
-			return false;
+		}catch(IOException | ClassNotFoundException e){
+			System.out.print("---Create new log file: Master now.---" + "\n");
+			return log();
 		}
 	}
 
-	public boolean saveImages(){
+	public boolean logData(){
 		try{
-			System.out.print("Writing pre-images to disk file: " + imagesFile.filePath + "\n");
-			imagesFile.save(pre_images);
+			//System.out.print("Logging data: " + log_data.filePath + "\n");
+			System.out.print("Logging data." + "\n");
+			log_data.save(m_data);
 			return true;
 		}catch(IOException e){
 			e.printStackTrace();
-			System.out.print("Saving images failed :(");
+			System.out.print("Logging data failed :(");
+			return false;
+		}
+	}
+	public boolean logImages(){
+		try{
+			//System.out.print("Logging pre-images: " + log_images.filePath + "\n");
+			System.out.print("Logging pre-images." + "\n");
+			log_images.save(pre_images);
+			return true;
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Logging images failed :(");
+			return false;
+		}
+	}
+	public boolean log(){
+		return logData() && logImages();
+	}
+	public boolean saveData(){
+		try{
+			DiskFile<RMHashMap> data;
+			if(mp){
+				data = dataF;
+			}else{
+				data = dataT;
+			}
+			System.out.print("Write working data to disk " + data.filePath + "\n");
+			data.save(m_data);
+			return true;
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Write working data failed :(");
+			return false;
+		}
+	}
+	public boolean saveMaster(){
+		try{
+			System.out.print("Write master pointer to disk " + master_file.filePath + "\n");
+			master_file.save(mp);
+			return true;
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Write master pointer failed :(");
 			return false;
 		}
 	}
@@ -87,37 +168,92 @@ public class ResourceManager implements IResourceManager
 			return null;
 		}
 	}
-	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
-		System.out.print("Received COMMIT-REQ." + "\n");
-		//!!!!!!!!!!!!!!!!Crash after receiving decision but before committing/aborting
-		cm.after_rec_before_operate();
-		if(pre_images.containsKey(xid)){
-			pre_images.remove(xid);
-			Save();
+	public void logStatus(int xid, P_Status new_status){
+		if(this.pre_images.containsKey(xid)){
+			P_Transaction pre_image = this.pre_images.get(xid);
+			pre_image.status = new_status;
+			this.pre_images.put(xid, pre_image);
+			log();
+			System.out.print("******Logged transaction: " + xid + " with status: " + new_status + "\n");
 		}
-		//dummy
+	}
+
+	public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+
+		System.out.print("Received COMMIT-REQ." + "\n");
+		logStatus(xid, P_Status.REC_COMMIT);
+		if(!pre_images.containsKey(xid)){
+			throw new InvalidTransactionException(xid);
+		}
+		P_Transaction current = pre_images.get(xid);
+		if(current.status == P_Status.COMMITED ||
+			current.status == P_Status.ABORTED ||
+			current.status == P_Status.VOTED_NO ||
+			current.status == P_Status.REC_ABORT){
+			throw new InvalidTransactionException(xid);
+		}
+
+		//Crash after receiving decision but before committing/aborting
+		cm.after_rec_before_operate();
+
+		saveData();
+		mp = !mp;
+		saveMaster();
+		logStatus(xid, P_Status.COMMITED);
 		System.out.print("Commited Transaction with id: " + xid + "\n");
 		return true;
 	}
+
 	public boolean Abort(int xid) throws RemoteException, InvalidTransactionException{
+
 		System.out.print("Received ABORT-REQ." + "\n");
-		//!!!!!!!!!!!!!!!!Crash after receiving decision but before committing/aborting
-		cm.after_rec_before_operate();
-		if(pre_images.containsKey(xid)) {
-			m_data = pre_images.remove(xid);
-			Save();
+		if(!pre_images.containsKey(xid)){
+			throw new InvalidTransactionException(xid);
 		}
+		P_Transaction current = pre_images.get(xid);
+		if(current.status == P_Status.COMMITED || current.status == P_Status.ABORTED){
+			throw new InvalidTransactionException(xid);
+		}
+		logStatus(xid, P_Status.REC_ABORT);
+
+		//Crash after receiving decision but before committing/aborting
+		cm.after_rec_before_operate();
+		m_data = pre_images.remove(xid).pre_image;
+		logStatus(xid, P_Status.ABORTED);
 		System.out.print("Aborted Transaction with id: " + xid + "\n");
 		return true;
 	}
 	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
-			//!!!!!!!!!!!!!!!Crash after receive vote request but before sending answer
+
+			//Crash after receive vote request but before sending answer
 			System.out.print("Received VOTE-REQ." + "\n");
 			cm.rec_req_before_send();
-			//!!!!!!!!!!!!!!Crash after decigin which answer to send (commit/abort)(YES/NO)
-			boolean result = pre_images.containsKey(xid);
+
+			boolean result;
+			if(!pre_images.containsKey(xid)){
+				result = false;
+			}else{
+				P_Transaction current = pre_images.get(xid);
+				 switch (current.status){
+					case VOTED_NO:
+					case REC_ABORT:
+					case ABORTED:{
+						result = false;
+						break;
+					}
+					default:
+						result = true;
+				}
+			}
+			//Crash after decide which answer to send (commit/abort)(YES/NO)
 			cm.after_decision();
-			//!!!!!!!!!!!!!!Crash after sending answer
+
+			if(result){
+				logStatus(xid,P_Status.VOTED_YES);
+			}else{
+				logStatus(xid, P_Status.VOTED_NO);
+			}
+			//Crash after sending answer
 			new Timer().schedule(new TimerTask() {
 					@Override
 					public void run() {
@@ -125,9 +261,6 @@ public class ResourceManager implements IResourceManager
 					}
 				}, 1);
 			return result;
-	}
-	public boolean Save(){
-		return saveData() && saveImages();
 	}
 
 	public int Start() throws RemoteException{return -1;};
@@ -137,22 +270,24 @@ public class ResourceManager implements IResourceManager
 	{
 		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
-				RMHashMap transaction_data = new RMHashMap();
+				P_Transaction transaction_data = new P_Transaction();
 				pre_images.put(xid, transaction_data);
 			}
-			RMHashMap td = pre_images.get(xid);
-			if(!td.containsKey(key)){
+			P_Transaction transaction_data = pre_images.get(xid);
+			RMHashMap pre_image = transaction_data.pre_image;
+			if(!pre_image.containsKey(key)){
 				if(!m_data.containsKey(key)){
-					td.put(key, null);
+					pre_image.put(key, null);
 				}else{
 						RMItem prev = m_data.get(key);
-						td.put(key, prev);
+						pre_image.put(key, prev);
 				}
-				pre_images.put(xid, td);
+				transaction_data.pre_image = pre_image;
+				pre_images.put(xid, transaction_data);
 				m_data.put(key, value);
 			}
 		}
-		Save();
+		log();
 	}
 
 	// Remove the item out of storage
@@ -160,22 +295,24 @@ public class ResourceManager implements IResourceManager
 	{
 		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
-				RMHashMap transaction_data = new RMHashMap();
+				P_Transaction transaction_data = new P_Transaction();
 				pre_images.put(xid, transaction_data);
 			}
-			RMHashMap td = pre_images.get(xid);
-			if(!td.containsKey(key)){
+			P_Transaction transaction_data = pre_images.get(xid);
+			RMHashMap pre_image = transaction_data.pre_image;
+			if(!pre_image.containsKey(key)){
 				if(!m_data.containsKey(key)){
-					td.put(key, null);
+					pre_image.put(key, null);
 				}else{
-					RMItem prev = m_data.get(key);
-					td.put(key, prev);
-			}
-				pre_images.put(xid, td);
+						RMItem prev = m_data.get(key);
+						pre_image.put(key, prev);
+				}
+				transaction_data.pre_image = pre_image;
+				pre_images.put(xid, transaction_data);
 				m_data.remove(key);
 			}
 		}
-		Save();
+		log();
 	}
 
 	// Deletes the encar item

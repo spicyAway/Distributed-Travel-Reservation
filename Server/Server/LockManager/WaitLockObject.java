@@ -1,10 +1,11 @@
 package Server.LockManager;
+import java.io.Serializable;
 
-public class WaitLockObject extends DataLockObject
+public class WaitLockObject extends DataLockObject implements Serializable
 {
 	protected Thread m_thread = null;
 
-	// The data members inherited are 
+	// The data members inherited are
 	// TransactionObject:: protected int m_xid;
 	// TransactionLockObject:: protected String m_data;
 	// TransactionLockObject:: protected int m_lockType;

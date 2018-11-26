@@ -11,15 +11,49 @@ public class LockManager implements Serializable
 {
 	private static int TABLE_SIZE = 2039;
 	private static int DEADLOCK_TIMEOUT = 10000;
+	private static String mw_name = "group34_Middleware";
 
-	private static TPHashTable lockTable = new TPHashTable(LockManager.TABLE_SIZE);
+	public static TPHashTable lockTable = new TPHashTable(LockManager.TABLE_SIZE);
 	private static TPHashTable stampTable = new TPHashTable(LockManager.TABLE_SIZE);
 	private static TPHashTable waitTable = new TPHashTable(LockManager.TABLE_SIZE);
+
+	private static DiskFile<TPHashTable> saved_lockTable;
+	private static DiskFile<TPHashTable> saved_stampTable;
+	private static DiskFile<TPHashTable> saved_waitTable;
 
 	public LockManager()
 	{
 		super();
+		saved_lockTable = new DiskFile<TPHashTable>(mw_name, "saved_lockTable");
+		saved_stampTable = new DiskFile<TPHashTable>(mw_name, "saved_stampTable");
+		saved_waitTable = new DiskFile<TPHashTable>(mw_name, "saved_waitTable");
+		loadFile();
 	}
+
+	public void loadFile(){
+		try{
+			this.lockTable = (TPHashTable) saved_lockTable.read();
+			this.stampTable = (TPHashTable) saved_stampTable.read();
+			this.waitTable = (TPHashTable) saved_waitTable.read();
+		}catch(IOException | ClassNotFoundException e){
+			System.out.print("---Create new log file: Locks now.---" + "\n");
+		}
+	}
+
+	public void saveFile(){
+		try{
+			//System.out.print("Logging data: " + log_data.filePath + "\n");
+			System.out.print("Saving locks." + "\n");
+			saved_lockTable.save(lockTable);
+			saved_stampTable.save(stampTable);
+			saved_waitTable.save(waitTable);
+
+		}catch(IOException e){
+			e.printStackTrace();
+			System.out.print("Saving locks failed :(");
+		}
+	}
+
 	public boolean Lock(int xid, String data, TransactionLockObject.LockType lockType) throws DeadlockException
 	{
 		// if any parameter is invalid, then return false
@@ -93,6 +127,28 @@ public class LockManager implements Serializable
 		}
 
 		return true;
+	}
+	public String info(int xid)
+	{
+		// If any parameter is invalid, then return false
+		if (xid < 0) {
+			return null;
+		}
+
+		TransactionLockObject lockQuery = new TransactionLockObject(xid, "", TransactionLockObject.LockType.LOCK_UNKNOWN); // Only used in elements() call below.
+		synchronized(this.lockTable) {
+			Vector vect = this.lockTable.elements(lockQuery);
+			TransactionLockObject xLockObject;
+			int size = vect.size();
+			System.out.print("*************DEBUG LOCK TABLE SIZE: " + size + "\n");
+
+			for (int i = (size - 1); i >= 0; i--)
+			{
+				xLockObject = (TransactionLockObject)vect.elementAt(i);
+				return xLockObject.toString();
+			}
+		}
+		return "Not exist!";
 	}
 
 
@@ -193,7 +249,6 @@ public class LockManager implements Serializable
 				}
 			}
 		}
-
 		return true;
 	}
 

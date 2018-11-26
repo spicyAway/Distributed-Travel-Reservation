@@ -27,10 +27,11 @@ public class RMIMiddleware extends ResourceManager
   private static String[] types = new String[]{"Flights", "Cars", "Rooms"};
   private LockManager lm;
   private TransactionManager tm;
-  private DiskFile<LockManager> lmFile;
+  //private LogFile<LockManager> Logged_Locks;
   public CoordinatorCrashManager ccm;
 
   //Constructor
+  @SuppressWarnings("unchecked")
   public RMIMiddleware()
   {
     super(mw_name);
@@ -38,10 +39,38 @@ public class RMIMiddleware extends ResourceManager
     this.lm = new LockManager();
     this.tm = new TransactionManager();
     this.ccm = new CoordinatorCrashManager();
-    this.lmFile = new DiskFile<LockManager>(RMIMiddleware.mw_name, "Locks");
-    boolean load_result = loadLocks();
-    System.out.print("LOADED LOCKS? " + load_result + "\n");
+    //this.Logged_Locks = new LogFile<LockManager>(RMIMiddleware.mw_name, "Logged-Locks");
+    //boolean load_result = this.loadLocks();
+    //System.out.print("LOADED LOCKS? " + load_result + "\n");
+    printLocks();
   }
+  public void printLocks(){
+    for(int i=1; i<this.tm.xid+1; i++){
+      System.out.print("**Debug locks: " + this.lm.info(i) + "\n");
+    }
+  }
+  //
+  // public boolean loadLocks(){
+  //   try{
+  //     this.lm = (LockManager) this.Logged_Locks.read();
+  //     return true;
+  //   }catch(IOException | ClassNotFoundException e){
+  //     System.out.print("---Created new Log file: Locks ---" + "\n");
+  //     return this.saveLocks();
+  //   }
+  // }
+  // public boolean saveLocks(){
+  //   try{
+  //     this.Logged_Locks.save((LockManager) this.lm, "Debug");
+  //     System.out.print("---Logged Locks---" + "\n");
+  //     printLocks();
+  //     return true;
+  //   }catch(IOException e){
+  //     e.printStackTrace();
+  //     System.out.print("Log locks failed." + "\n");
+  //     return false;
+  //   }
+  // }
 
   public void resetCrashes() throws RemoteException{
     this.ccm.mode = -1;
@@ -81,27 +110,6 @@ public class RMIMiddleware extends ResourceManager
       }
     }
   }
-  public boolean loadLocks(){
-    try{
-      this.lm = this.lmFile.read();
-      return true;
-    }catch(IOException | ClassNotFoundException e){
-      System.out.print("------Create new disk file: Locks now.-------" + "\n");
-      return saveLocks();
-    }
-  }
-
-  public boolean saveLocks(){
-    try{
-      System.out.print("^^^^^^^Logged Lock Manager^^^^^^^" + "\n");
-      this.lmFile.save(this.lm);
-      return true;
-    }catch(IOException e){
-      e.printStackTrace();
-      System.out.print("Lock Manager save file failed." + "\n");
-      return false;
-    }
-  }
   //Echo from the active Resource Managers
   public void EchoEM() throws RemoteException{
     try {
@@ -136,7 +144,8 @@ public class RMIMiddleware extends ResourceManager
     try{
       tm.resetTime(xid);
       boolean lock_result = this.lm.Lock(xid, lockKey, type);
-      saveLocks();
+      //this.saveLocks();
+      this.lm.saveFile();
       AddManagers(xid, lockKey);
       if (!lock_result) {
         Abort(xid);
@@ -378,7 +387,8 @@ public class RMIMiddleware extends ResourceManager
     }
     result = tm.Abort(xid);
     lm.UnlockAll(xid);
-    saveLocks();
+    this.lm.saveFile();
+  //  this.saveLocks();
     return result;
   }
   public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
@@ -388,7 +398,9 @@ public class RMIMiddleware extends ResourceManager
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
-    return tm.Prepare(xid) && lm.UnlockAll(xid) && saveLocks();
+    this.lm.saveFile();
+    return tm.Prepare(xid) && lm.UnlockAll(xid);
+    //this.saveLocks();
   }
   public static void main(String args[]) throws RemoteException
   {
@@ -474,7 +486,6 @@ public class RMIMiddleware extends ResourceManager
             System.out.print("Time-out Transaction " + id + "\n");
           }
         }
-      }
       try {
         Thread.sleep(100);
       }catch(Exception e){
@@ -482,6 +493,7 @@ public class RMIMiddleware extends ResourceManager
       }
     }
   }
+}
   public void shutdown() throws RemoteException{
     try{
       this.getFlightManager().shutdown();
