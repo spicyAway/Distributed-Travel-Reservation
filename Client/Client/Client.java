@@ -99,6 +99,31 @@ public abstract class Client
 					}
 					break;
 				}
+				case ResetCrashes: {
+					System.out.print("Reset all the crashes now." + "\n");
+					try{
+						m_resourceManager.resetCrashes();
+						System.out.print("All the crashes reset." + "\n");
+					}catch(Exception e){
+						System.out.print("Could not reset crashes, try again." + "\n");
+					}
+					break;
+				}
+				case CrashMiddleware: {
+					checkArgumentsCount(2, arguments.size());
+					int mode = toInt(arguments.elementAt(1));
+					System.out.print("Will crash Middlware with mode: " + mode + "\n");
+					m_resourceManager.crashMiddleware(mode);
+					break;
+				}
+				case CrashResourceManager: {
+					checkArgumentsCount(3, arguments.size());
+					String name = arguments.elementAt(1);
+					int mode = toInt(arguments.elementAt(2));
+					System.out.print("Will crash Resource Manager: " + name + " with mode: " + mode + "\n");
+					m_resourceManager.crashResourceManager(name, mode);
+					break;
+				}
 				case Commit: {
 					checkArgumentsCount(2, arguments.size());
 					int xid = toInt(arguments.elementAt(1));

@@ -4,6 +4,7 @@ import Server.Interface.*;
 import Server.Common.*;
 import Server.LockManager.*;
 import Server.TransactionManager.*;
+import java.util.Map.Entry;
 
 import java.rmi.NotBoundException;
 import java.util.*;
@@ -27,8 +28,7 @@ public class RMIMiddleware extends ResourceManager
   private static String[] types = new String[]{"Flights", "Cars", "Rooms"};
   private LockManager lm;
   private TransactionManager tm;
-  //private LogFile<LockManager> Logged_Locks;
-  public CoordinatorCrashManager ccm;
+
 
   //Constructor
   @SuppressWarnings("unchecked")
@@ -37,11 +37,14 @@ public class RMIMiddleware extends ResourceManager
     super(mw_name);
     this.managers = new HashMap<String, IResourceManager>();
     this.lm = new LockManager();
+  //   try{
+  //   Thread.sleep(100);
+  // }catch(Exception e){
+  //   System.out.print("sleep error. ");
+  // }
     this.tm = new TransactionManager();
-    this.ccm = new CoordinatorCrashManager();
-    //this.Logged_Locks = new LogFile<LockManager>(RMIMiddleware.mw_name, "Logged-Locks");
-    //boolean load_result = this.loadLocks();
-    //System.out.print("LOADED LOCKS? " + load_result + "\n");
+    this.tm.ccm = new CoordinatorCrashManager();
+    loadFile();
     printLocks();
   }
   public void printLocks(){
@@ -49,40 +52,56 @@ public class RMIMiddleware extends ResourceManager
       System.out.print("**Debug locks: " + this.lm.info(i) + "\n");
     }
   }
-  //
-  // public boolean loadLocks(){
-  //   try{
-  //     this.lm = (LockManager) this.Logged_Locks.read();
-  //     return true;
-  //   }catch(IOException | ClassNotFoundException e){
-  //     System.out.print("---Created new Log file: Locks ---" + "\n");
-  //     return this.saveLocks();
-  //   }
-  // }
-  // public boolean saveLocks(){
-  //   try{
-  //     this.Logged_Locks.save((LockManager) this.lm, "Debug");
-  //     System.out.print("---Logged Locks---" + "\n");
-  //     printLocks();
-  //     return true;
-  //   }catch(IOException e){
-  //     e.printStackTrace();
-  //     System.out.print("Log locks failed." + "\n");
-  //     return false;
-  //   }
-  // }
+  public void loadFile(){
+    try{
+      @SuppressWarnings("unchecked")
+      HashMap<Integer, TransactionManager.Transaction> savedData = (HashMap<Integer, TransactionManager.Transaction>) tm.log_Transactions.read();
+      for(Entry<Integer, TransactionManager.Transaction> ts: savedData.entrySet()){
+
+        tm.xid = Math.max(tm.xid, ts.getKey());
+        tm.activeTransactions.put(ts.getKey(), ts.getValue());
+
+        switch(ts.getValue().status){
+          case ACTIVE:{
+            this.tm.resetTime(ts.getKey());
+            break;
+          }
+          case IN_PREPARE:{
+            this.Prepare(ts.getKey());
+            break;
+          }
+          case IN_COMMIT:{
+            this.Commit(ts.getKey());
+            break;
+          }
+          case IN_ABORT:{
+            this.Abort(ts.getKey());
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    }catch(InvalidTransactionException|TransactionAbortedException ive){
+      System.out.print("Found invalid or aborted transaction!");
+    }
+    catch(IOException | ClassNotFoundException e){
+      System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
+      this.tm.save();
+    }
+  }
 
   public void resetCrashes() throws RemoteException{
-    this.ccm.mode = -1;
-    System.out.print("****DEBUG CRASH MODE: " + this.ccm.mode + "\n");
+    this.tm.ccm.mode = -1;
+    System.out.print("****DEBUG CRASH MODE: " + this.tm.ccm.mode + "\n");
     this.getCarManager().resetCrashes();
     this.getRoomManager().resetCrashes();
     this.getFlightManager().resetCrashes();
   }
 
   public void crashMiddleware(int mode) throws RemoteException{
-    this.ccm.mode = mode;
-    System.out.print("*****DEBUG CRASH MODE: " + this.ccm.mode);
+    this.tm.ccm.mode = mode;
+    System.out.print("*****DEBUG CRASH MODE: " + this.tm.ccm.mode);
   }
   public void crashResourceManager(String name, int mode) throws RemoteException{
     this.managers.get(name).crashResourceManager(name, mode);
@@ -98,7 +117,7 @@ public class RMIMiddleware extends ResourceManager
         String hostName = resourceManagers[i];
         //Registry registry = LocateRegistry.getRegistry(hostName,port_);
         Registry registry = LocateRegistry.getRegistry(host_,port_);
-        System.out.print("Get the registry successfully!----------" + "\n");
+      //  System.out.print("Get the registry successfully!----------" + "\n");
         resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + types[i]);
         System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
         this.managers.put(types[i], resourceManager_Proxy);
@@ -108,6 +127,32 @@ public class RMIMiddleware extends ResourceManager
         e.printStackTrace();
         System.exit(1);
       }
+    }
+  }
+  public void reconnect(String hostName) throws RemoteException{
+    try {
+      IResourceManager resourceManager_Proxy;
+      boolean first = true;
+      while (true) {
+        try {
+          Registry registry = LocateRegistry.getRegistry(host_,port_);
+          resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
+          System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
+          break;
+        }
+        catch (NotBoundException|RemoteException e) {
+          if (first) {
+            System.out.println("Waiting for '" + hostName + "\n");
+            first = false;
+          }
+        }
+        Thread.sleep(500);
+      }
+    }
+    catch (Exception e) {
+      System.err.println("Reconnect Error!");
+      e.printStackTrace();
+      System.exit(1);
     }
   }
   //Echo from the active Resource Managers
@@ -187,83 +232,143 @@ public class RMIMiddleware extends ResourceManager
   //For all the following methods, request locks first then perform the operation
   public boolean addFlight(int xid, int flightNum, int flightSeats, int flightPrice)throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid, Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getFlightManager().addFlight(xid, flightNum, flightSeats, flightPrice);
+    try{
+      Lock(xid, Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getFlightManager().addFlight(xid, flightNum, flightSeats, flightPrice);
+    }catch(RemoteException e){
+      this.reconnect("Flights");
+    }
+    return false;
   }
 
   public boolean addCars(int xid, String location, int count, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid, Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getCarManager().addCars(xid, location, count, price);
+    try{
+      Lock(xid, Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getCarManager().addCars(xid, location, count, price);
+    }catch(RemoteException e){
+      this.reconnect("Cars");
+    }
+    return false;
   }
 
   public boolean addRooms(int xid, String location, int count, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getRoomManager().addRooms(xid, location, count, price);
+    try{
+      Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getRoomManager().addRooms(xid, location, count, price);
+    }catch(RemoteException e){
+      this.reconnect("Rooms");
+    }
+    return false;
   }
 
   // Deletes flight
   public boolean deleteFlight(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getFlightManager().deleteFlight(xid, flightNum);
+    try{
+      Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getFlightManager().deleteFlight(xid, flightNum);
+    }catch(RemoteException e){
+      this.reconnect("Flights");
+    }
+    return false;
   }
 
   // Delete cars at a location
   public boolean deleteCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getCarManager().deleteCars(xid, location);
+    try{
+      Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getCarManager().deleteCars(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Cars");
+    }
+    return false;
   }
 
   // Delete rooms at a location
   public boolean deleteRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
-    return this.getRoomManager().deleteRooms(xid, location);
+    try{
+      Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
+      return this.getRoomManager().deleteRooms(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Rooms");
+    }
+    return false;
   }
 
   // Returns the number of empty seats in this flight
   public int queryFlight(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
-    return this.getFlightManager().queryFlight(xid, flightNum);
+    try{
+      Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
+      return this.getFlightManager().queryFlight(xid, flightNum);
+    }catch(RemoteException e){
+      this.reconnect("Flights");
+    }
+    return -1;
   }
 
   // Returns the number of cars available at a location
   public int queryCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
-    return this.getCarManager().queryCars(xid, location);
+    try{
+      Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
+      return this.getCarManager().queryCars(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Cars");
+    }
+    return -1;
   }
 
   // Returns the amount of rooms available at a location
   public int queryRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
-  {
-    Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
-    return this.getRoomManager().queryRooms(xid, location);
+    {
+    try{
+      Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
+      return this.getRoomManager().queryRooms(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Rooms");
+    }
+    return -1;
   }
 
   // Returns price of a seat in this flight
   public int queryFlightPrice(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
-    return this.getFlightManager().queryFlightPrice(xid, flightNum);
+    try{
+      Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
+      return this.getFlightManager().queryFlightPrice(xid, flightNum);
+    }catch(RemoteException e){
+      this.reconnect("Flights");
+    }
+    return -1;
   }
 
   // Returns price of cars at this location
   public int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
-    return this.getCarManager().queryCarsPrice(xid, location);
+    try{
+      Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
+      return this.getCarManager().queryCarsPrice(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Cars");
+    }
+    return -1;
   }
 
   // Returns room price at this location
   public int queryRoomsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
-    return this.getRoomManager().queryRoomsPrice(xid, location);
+    try{
+      Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
+      return this.getRoomManager().queryRoomsPrice(xid, location);
+    }catch(RemoteException e){
+      this.reconnect("Rooms");
+    }
+    return -1;
   }
 
   public String queryCustomerInfo(int xid, int customerID) throws RemoteException, TransactionAbortedException, InvalidTransactionException
@@ -392,14 +497,21 @@ public class RMIMiddleware extends ResourceManager
     return result;
   }
   public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
-    return tm.Prepare(xid);
+    boolean result = tm.Prepare(xid);
+    //If successfully aborted or commited , release the locks
+    if(result){
+      lm.UnlockAll(xid);
+      this.lm.saveFile();
+    }
+    return result;
   }
   public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
+    boolean result = tm.Prepare(xid) && lm.UnlockAll(xid);
     this.lm.saveFile();
-    return tm.Prepare(xid) && lm.UnlockAll(xid);
+    return result;
     //this.saveLocks();
   }
   public static void main(String args[]) throws RemoteException
@@ -500,7 +612,6 @@ public class RMIMiddleware extends ResourceManager
     }catch(Exception e) {
       System.out.print("Resource Manager - Flight shutted down." + "\n");
     }
-
     try{
       this.getRoomManager().shutdown();
     }catch(Exception e) {

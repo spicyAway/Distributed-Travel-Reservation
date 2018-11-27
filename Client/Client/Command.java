@@ -7,6 +7,9 @@ public enum Command {
 	Commit("Commit a transaction with xid", "<xid>"),
 	Abort("Abort a transaction with xid", "<xid>"),
 	Shutdown("Quit all the servers", ""),
+	ResetCrashes("Disable all the crashes at all servers", ""),
+	CrashMiddleware("Crash Middleware given the mode", "<mode>"),
+	CrashResourceManager("Crash Resource Manager given its name and crash mode", "<RM_name>,<mode>"),
 
 	AddFlight("Add a new flight number", "<xid>,<FlightNumber>,<NumberOfSeats>,<PricePerSeat>"),
 	AddCars("Add a new car location", "<xid>,<Location>,<NumberOfCar>,<Price>"),

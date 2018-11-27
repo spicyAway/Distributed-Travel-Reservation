@@ -19,10 +19,11 @@ public class TransactionManager {
     public static int RESPONSE_TIMEOUT = 10; //In seconds
     public static long TIMEOUT = 100000; //In milliseconds
     public static int xid;
-    private static HashMap<Integer, Transaction> activeTransactions;
+    public static HashMap<Integer, Transaction> activeTransactions;
     public static Hashtable<Integer, Long> livingTime;
-    private static LogFile<HashMap<Integer, Transaction>> log_Transactions;
+    public static LogFile<HashMap<Integer, Transaction>> log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
     public CoordinatorCrashManager ccm;
+    private boolean tryflag = false;
 
     public static enum Status{
       ACTIVE,
@@ -34,10 +35,9 @@ public class TransactionManager {
       TIMED_OUT
     }
 
-    private static class Transaction implements Serializable {
-
-      private Status status;
-      private ArrayList<IResourceManager> rms;
+    public static class Transaction implements Serializable {
+      public Status status;
+      public ArrayList<IResourceManager> rms;
 
       Transaction(){
         this.rms = new ArrayList<IResourceManager>();
@@ -50,7 +50,7 @@ public class TransactionManager {
         livingTime = new Hashtable<Integer, Long>();
         ccm = new CoordinatorCrashManager();
         log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
-        loadFile();
+        //loadFile();
     }
     public void save(){
       try{
@@ -60,37 +60,37 @@ public class TransactionManager {
         System.out.print("Transaction Manager save file failed." + "\n");
       }
     }
-    public void loadFile(){
-      try{
-        HashMap<Integer, Transaction> savedData = (HashMap<Integer, Transaction>) log_Transactions.read();
-        for(Entry<Integer, Transaction> ts: savedData.entrySet()){
-          xid = Math.max(xid, ts.getKey());
-          activeTransactions.put(ts.getKey(), ts.getValue());
-          switch(ts.getValue().status){
-            case ACTIVE:
-              resetTime(ts.getKey());
-              break;
-            case IN_PREPARE:
-              Prepare(ts.getKey());
-              break;
-            case IN_COMMIT:
-              Commit(ts.getKey());
-              break;
-            case IN_ABORT:
-              Abort(ts.getKey());
-              break;
-            default:
-              break;
-          }
-        }
-      }catch(InvalidTransactionException|TransactionAbortedException ive){
-        System.out.print("Found invalid or aborted transaction!");
-      }
-      catch(IOException | ClassNotFoundException e){
-        System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
-        save();
-      }
-    }
+    // public void loadFile(){
+    //   try{
+    //     HashMap<Integer, Transaction> savedData = (HashMap<Integer, Transaction>) log_Transactions.read();
+    //     for(Entry<Integer, Transaction> ts: savedData.entrySet()){
+    //       xid = Math.max(xid, ts.getKey());
+    //       activeTransactions.put(ts.getKey(), ts.getValue());
+    //       switch(ts.getValue().status){
+    //         case ACTIVE:
+    //           resetTime(ts.getKey());
+    //           break;
+    //         case IN_PREPARE:
+    //           Prepare(ts.getKey());
+    //           break;
+    //         case IN_COMMIT:
+    //           Commit(ts.getKey());
+    //           break;
+    //         case IN_ABORT:
+    //           Abort(ts.getKey());
+    //           break;
+    //         default:
+    //           break;
+    //       }
+    //     }
+    //   }catch(InvalidTransactionException|TransactionAbortedException ive){
+    //     System.out.print("Found invalid or aborted transaction!");
+    //   }
+    //   catch(IOException | ClassNotFoundException e){
+    //     System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
+    //     save();
+    //   }
+    // }
     public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
       Transaction currentT = activeTransactions.get(xid);
       System.out.print("Preparing transaction with id:  " + xid + "\n");
@@ -102,30 +102,46 @@ public class TransactionManager {
       }
       setStatus(xid, Status.IN_PREPARE);
       ArrayList<IResourceManager> relatedRMs = currentT.rms;
-      ExecutorService executorService = Executors.newSingleThreadExecutor();
+      //ExecutorService executorService = Executors.newSingleThreadExecutor();
       boolean result = true;
       for (IResourceManager rm : relatedRMs) {
         try{
-          Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-              @Override
-              public Boolean call() throws Exception {
-                System.out.print("Sending VOTE-REQ to RM: " + rm.getName() + "\n");
-                return rm.Prepare(xid);
-              }
-          });
+          // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+          //     @Override
+          //     public Boolean call() throws Exception {
+          //       System.out.print("Sending VOTE-REQ to RM: " + rm.getName() + "\n");
+          //       return rm.Prepare(xid);
+          //     }
+          // });
+          if(!rm.Prepare(xid)){
+            System.out.print("Received NO from: " + rm.getName());
+            result = false;
+            break;
+          }
           //Crash after sending vote request and before receiving any replies
           ccm.after_vote_before_rec();
 
           //Crash after receiving some replies but not all
           ccm.rec_some_rep();
-          if(!future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS)){
-            System.out.print("Received NO from: " + rm.getName());
-            result = false;
-            break;
-          }
+          // if(!future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS)){
+          //   System.out.print("Received NO from: " + rm.getName());
+          //   result = false;
+          //   break;
+          // }
+
           //Crash after receiving all replies but before deciding
           ccm.rec_all_before_dec();
         }catch(Exception e){
+          if(!tryflag){
+            try{
+            Thread.sleep(100);
+          }catch(Exception se){
+            System.out.print("sleep error when retry.");
+            System.exit(1);
+          }
+            Prepare(xid);
+            tryflag = true;
+          }
           result = false;
           break;
         }
@@ -133,10 +149,9 @@ public class TransactionManager {
       if(result){
         return Commit(xid);
       }else{
-        setStatus(xid, Status.ACTIVE);
+        return Abort(xid);
       }
-      executorService.shutdown();
-      return result;
+      //executorService.shutdown();
     }
 
     public boolean Abort(int xid) throws RemoteException, InvalidTransactionException {
@@ -150,26 +165,29 @@ public class TransactionManager {
         //Crash after deciding but before sending decision
         ccm.after_dec_before_send();
 
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        //ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
         ArrayList<IResourceManager> relatedRMs = currentT.rms;
         if(relatedRMs.size() > 0){
           for (IResourceManager rm : relatedRMs) {
             try{
-              Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-                  @Override
-                  public Boolean call() throws Exception {
-                    System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
-                    return rm.Abort(xid);
-                  }
-              });
+              // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+              //     @Override
+              //     public Boolean call() throws Exception {
+              //       System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
+              //       return rm.Abort(xid);
+              //     }
+              // });
               //Crash after sending some but not all decisions
+              System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
+
               ccm.send_some_dec();
               //Crash after having sent all decisions
               ccm.after_send_all_dec();
-              result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
+              //result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
+              result &= rm.Abort(xid);
           }catch(Exception e){
-            System.out.print("One of the Resource Manager crashes! Please wait." + "\n");
+            System.out.print("Possible crashes! Please wait." + "\n");
             resetTime(xid);
             result = false;
             break;
@@ -184,7 +202,7 @@ public class TransactionManager {
       }else{
         setStatus(xid, Status.IN_ABORT);
       }
-      executorService.shutdown();
+      //executorService.shutdown();
       return result;
   }
     public boolean Commit(int xid) throws RemoteException, TransactionAbortedException, InvalidTransactionException {
@@ -199,25 +217,26 @@ public class TransactionManager {
         //Crash after deciding but before sending decision
         ccm.after_dec_before_send();
 
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        //ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
 
         ArrayList<IResourceManager> relatedRMs = currentT.rms;
         for (IResourceManager rm : relatedRMs) {
           try{
-            Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-                @Override
-                public Boolean call() throws Exception {
-                  System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
-                  return rm.Commit(xid);
-                }
-            });
+            // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
+            //     @Override
+            //     public Boolean call() throws Exception {
+            //       System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
+            //       return rm.Commit(xid);
+            //     }
+            // });
+            System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
             //Crash after sending some but not all decisions
             ccm.send_some_dec();
             //Crash after having sent all decisions
             ccm.after_send_all_dec();
+            result &= rm.Commit(xid);
 
-            result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
           }catch(Exception e){
             result = false;
             break;
@@ -231,7 +250,7 @@ public class TransactionManager {
         }else{
           setStatus(xid, Status.IN_COMMIT);
         }
-        executorService.shutdown();
+        //executorService.shutdown();
         return result;
     }
     public int Start() {

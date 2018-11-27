@@ -22,6 +22,8 @@ public class ResourceManager implements IResourceManager
 	protected Boolean mp;
 	protected Map<Integer, P_Transaction> pre_images;
 	public CrashManager cm;
+	public static Hashtable<Integer, Long> livingTime;
+	public static long TIMEOUT = 100000; //In milliseconds
 
 	//Files wrote into disk
 	protected DiskFile<RMHashMap> dataT;
@@ -40,10 +42,15 @@ public class ResourceManager implements IResourceManager
 		COMMITED,
 		ABORTED
 	}
+	public void resetTime(int xid) {
+			synchronized (livingTime) {
+					livingTime.put(xid, System.currentTimeMillis());
+			}
+	}
 
-	private static class P_Transaction implements Serializable{
-		private P_Status status;
-		private RMHashMap pre_image;
+	public static class P_Transaction implements Serializable{
+		public P_Status status;
+		public RMHashMap pre_image;
 		P_Transaction(){
 			this.status = P_Status.ACTIVE;
 			this.pre_image = new RMHashMap();
@@ -58,6 +65,7 @@ public class ResourceManager implements IResourceManager
 		m_name = p_name;
 		mp = true;
 		cm = new CrashManager();
+		livingTime = new Hashtable<Integer, Long>();
 
 		//Files
 		dataT = new DiskFile(m_name, "dataT");
@@ -160,6 +168,7 @@ public class ResourceManager implements IResourceManager
 	// Reads a data item
 	protected RMItem readData(int xid, String key)
 	{
+		this.resetTime(xid);
 		synchronized(m_data) {
 			RMItem item = m_data.get(key);
 			if (item != null) {
@@ -271,6 +280,7 @@ public class ResourceManager implements IResourceManager
 		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
 				P_Transaction transaction_data = new P_Transaction();
+				resetTime(xid);
 				pre_images.put(xid, transaction_data);
 			}
 			P_Transaction transaction_data = pre_images.get(xid);
@@ -287,6 +297,7 @@ public class ResourceManager implements IResourceManager
 				m_data.put(key, value);
 			}
 		}
+		this.resetTime(xid);
 		log();
 	}
 
@@ -296,6 +307,7 @@ public class ResourceManager implements IResourceManager
 		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
 				P_Transaction transaction_data = new P_Transaction();
+				resetTime(xid);
 				pre_images.put(xid, transaction_data);
 			}
 			P_Transaction transaction_data = pre_images.get(xid);
@@ -312,6 +324,7 @@ public class ResourceManager implements IResourceManager
 				m_data.remove(key);
 			}
 		}
+		this.resetTime(xid);
 		log();
 	}
 

@@ -7,6 +7,7 @@ package Server.RMI;
 
 import Server.Interface.*;
 import Server.Common.*;
+import Server.TransactionManager.*;
 
 import java.rmi.NotBoundException;
 import java.util.*;
@@ -16,7 +17,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
-public class RMIResourceManager extends ResourceManager 
+public class RMIResourceManager extends ResourceManager
 {
 	private static String s_serverName = "Server";
 	//TODO: REPLACE 'ALEX' WITH YOUR GROUP NUMBER TO COMPILE
@@ -28,7 +29,7 @@ public class RMIResourceManager extends ResourceManager
 		{
 			s_serverName = args[0];
 		}
-			
+
 		// Create the RMI server entry
 		try {
 			// Create a new Server object
@@ -58,8 +59,21 @@ public class RMIResourceManager extends ResourceManager
 						e.printStackTrace();
 					}
 				}
-			});                                       
+			});
 			System.out.println("'" + s_serverName + "' resource manager server ready and bound to '" + s_rmiPrefix + s_serverName + "'");
+			//Time-to-live functionality
+			Thread timeThread = new Thread(new Runnable(){
+				@Override
+				public void run() {
+					try {
+						server.countingTime();
+					}catch (Exception e){
+						System.out.print("Time to live error." + "\n");
+						e.printStackTrace();
+					}
+				}
+			});
+			timeThread.start();
 		}
 		catch (Exception e) {
 			System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
@@ -77,5 +91,33 @@ public class RMIResourceManager extends ResourceManager
 	public RMIResourceManager(String name)
 	{
 		super(name);
+	}
+
+	public void countingTime()throws RemoteException, TransactionAbortedException, InvalidTransactionException {
+			while (true) {
+				synchronized(this.livingTime){
+					if(this.livingTime.isEmpty()){
+						continue;
+					}
+					for (Integer id : this.livingTime.keySet()) {
+						if(!this.pre_images.containsKey(id)){
+							continue;
+						}
+						P_Transaction current = this.pre_images.get(id);
+						if(current.status == P_Status.COMMITED || current.status == P_Status.ABORTED){
+							continue;
+						}
+						if (System.currentTimeMillis() > this.livingTime.get(id) + this.TIMEOUT) {
+							this.Abort(id);
+							System.out.print("Time-out Transaction " + id + "\n");
+						}
+					}
+				try {
+					Thread.sleep(100);
+				}catch(Exception e){
+					System.out.print("Sleep error.");
+				}
+			}
+		}
 	}
 }
