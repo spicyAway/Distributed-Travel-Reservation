@@ -60,6 +60,8 @@ public class RMIMiddleware extends ResourceManager
 
         tm.xid = Math.max(tm.xid, ts.getKey());
         tm.activeTransactions.put(ts.getKey(), ts.getValue());
+        //Crash during recovery
+        tm.ccm.during_recovery();
 
         switch(ts.getValue().status){
           case ACTIVE:{
@@ -71,7 +73,7 @@ public class RMIMiddleware extends ResourceManager
             break;
           }
           case IN_COMMIT:{
-            this.Commit(ts.getKey());
+            this.Recommit(ts.getKey());
             break;
           }
           case IN_ABORT:{
@@ -121,6 +123,7 @@ public class RMIMiddleware extends ResourceManager
         resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + types[i]);
         System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
         this.managers.put(types[i], resourceManager_Proxy);
+        this.tm.managers.put(types[i], resourceManager_Proxy);
       }
       catch (Exception e) {
         System.err.println("Middleware Manager exception: " + e.toString());
@@ -137,7 +140,8 @@ public class RMIMiddleware extends ResourceManager
         try {
           Registry registry = LocateRegistry.getRegistry(host_,port_);
           resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
-          System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
+          System.out.print("Reconnect from " + hostName + " successfully!" + "\n");
+          this.managers.put(hostName, resourceManager_Proxy);
           break;
         }
         catch (NotBoundException|RemoteException e) {
@@ -153,6 +157,31 @@ public class RMIMiddleware extends ResourceManager
       System.err.println("Reconnect Error!");
       e.printStackTrace();
       System.exit(1);
+    }
+  }
+  public boolean reconnectOnce(String hostName) throws RemoteException{
+    IResourceManager resourceManager_Proxy;
+    try {
+      Registry registry = LocateRegistry.getRegistry(host_,port_);
+      resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
+      System.out.print("Reconnect: " + hostName + " successfully!" + "\n");
+      //this.managers.put(hostName, resourceManager_Proxy);
+      return true;
+    }catch(NotBoundException|RemoteException e) {
+      return false;
+    }
+  }
+  public boolean Heartbeat(String hostName) throws RemoteException{
+    IResourceManager resourceManager_Proxy;
+    try {
+      Registry registry = LocateRegistry.getRegistry(host_,port_);
+      resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
+      //System.out.print("...Heartbeat" + hostName + "..." + "\n");
+      this.managers.put(hostName, resourceManager_Proxy);
+      this.tm.managers.put(hostName, resourceManager_Proxy);
+      return true;
+    }catch(NotBoundException|RemoteException e) {
+      return false;
     }
   }
   //Echo from the active Resource Managers
@@ -207,24 +236,24 @@ public class RMIMiddleware extends ResourceManager
     switch(ident){
       case "fli":{
         System.out.print("ADDED FLIGHT MANAGER TO TM" + "\n");
-        tm.addRM(xid, this.getFlightManager());
+        tm.addRM(xid, "Flights");
         break;
       }
       case "roo":{
         System.out.print("ADDED ROOM MANAGER TO TM" + "\n");
-        tm.addRM(xid, this.getRoomManager());
+        tm.addRM(xid, "Rooms");
         break;
       }
       case "car":{
         System.out.print("ADDED CAR MANAGER TO TM" + "\n");
-        tm.addRM(xid, this.getCarManager());
+        tm.addRM(xid, "Cars");
         break;
       }
       case "cus":{
         System.out.print("ADDED ALL MANAGERS TO TM" + "\n");
-        tm.addRM(xid, this.getFlightManager());
-        tm.addRM(xid, this.getRoomManager());
-        tm.addRM(xid, this.getCarManager());
+        tm.addRM(xid, "Flights");
+        tm.addRM(xid, "Rooms");
+        tm.addRM(xid, "Cars");
         break;
       }
     }
@@ -491,29 +520,70 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     result = tm.Abort(xid);
-    lm.UnlockAll(xid);
-    this.lm.saveFile();
+    if(result){
+      lm.UnlockAll(xid);
+      this.lm.saveFile();
+    }
   //  this.saveLocks();
     return result;
   }
   public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
-    boolean result = tm.Prepare(xid);
+    boolean result;
+    boolean noforceAbort = true;
+    try{
+       result = tm.Prepare(xid);
+    }catch(Exception e){
+        try{
+            System.out.print("^^^^Waiting for recovery and try again." + "\n");
+            Thread.sleep(5000);
+          }catch(Exception se){
+            System.out.print("sleep error when retry.");
+            System.exit(1);
+          }
+        boolean uprunning = reconnectOnce("Flights") && reconnectOnce("Rooms") && reconnectOnce("Cars");
+        if(uprunning){
+          System.out.print("^^^^Up running again!" + "\n");
+          try{
+            Thread.sleep(200);
+            result = tm.Prepare(xid);
+          }catch(Exception se_2){
+            se_2.printStackTrace();
+            System.out.print("Whoops error again.");
+            result = Abort(xid);
+            noforceAbort = false;
+          }
+        }else{
+          System.out.print("^^^^No response again!" + "\n");
+          result = Abort(xid);
+          noforceAbort = false;
+        }
+      }
     //If successfully aborted or commited , release the locks
     if(result){
       lm.UnlockAll(xid);
       this.lm.saveFile();
     }
-    return result;
+    return result && noforceAbort;
   }
   public boolean Commit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
     if(!tm.checkAlive(xid)){
       throw new InvalidTransactionException(xid);
     }
-    boolean result = tm.Prepare(xid) && lm.UnlockAll(xid);
+    boolean result = Prepare(xid) && lm.UnlockAll(xid);
     this.lm.saveFile();
     return result;
     //this.saveLocks();
   }
+  public boolean Recommit(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
+    if(!tm.checkAlive(xid)){
+      throw new InvalidTransactionException(xid);
+    }
+    boolean result = tm.Commit(xid) && lm.UnlockAll(xid);
+    this.lm.saveFile();
+    return result;
+    //this.saveLocks();
+  }
+
   public static void main(String args[]) throws RemoteException
   {
     String[] providedManagers = new String[managerSize];
@@ -573,6 +643,34 @@ public class RMIMiddleware extends ResourceManager
         }
       });
       timeThread.start();
+
+      //Hearbeat functionality
+      //Time-to-live functionality
+      Thread beatThread = new Thread(new Runnable(){
+        @Override
+        public void run() {
+          try {
+            Timer timer = new Timer(true);
+            timer.schedule(new TimerTask(){
+              public void run(){
+                try{
+                  mw.Heartbeat("Flights");
+                  mw.Heartbeat("Cars");
+                  mw.Heartbeat("Rooms");
+                }catch (RemoteException e){
+                  System.out.print("Lost Connection error." + "\n");
+                  }
+                }
+              },1000,1000);
+          }catch (Exception e){
+            System.out.print("Heartbeat error." + "\n");
+          }
+        }
+      });
+      beatThread.start();
+
+
+
     }catch (Exception e) {
       System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
       e.printStackTrace();
@@ -593,6 +691,15 @@ public class RMIMiddleware extends ResourceManager
           continue;
         }
         for (Integer id : tm.livingTime.keySet()) {
+          TransactionManager.Transaction currentT = tm.activeTransactions.get(id);
+          if(currentT.status == TransactionManager.Status.COMMITED || currentT.status == TransactionManager.Status.ABORTED){
+            continue;
+          }
+          // if(currentT.status == TransactionManager.Status.IN_COMMIT || currentT.status == TransactionManager.Status.IN_ABORT){
+          //   if(!reconnectOnce("Flights") && reconnectOnce("Rooms") && reconnectOnce("Cars")){
+          //     resetTime(id);
+          //   }
+          // }
           if (System.currentTimeMillis() > tm.livingTime.get(id) + tm.TIMEOUT) {
             Abort(id);
             System.out.print("Time-out Transaction " + id + "\n");
@@ -625,5 +732,7 @@ public class RMIMiddleware extends ResourceManager
     System.out.print("All Resource Managers shutted down." + "\n");
     System.exit(1);
   }
+
+
 
 }

@@ -24,6 +24,7 @@ public class TransactionManager {
     public static LogFile<HashMap<Integer, Transaction>> log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
     public CoordinatorCrashManager ccm;
     private boolean tryflag = false;
+    public HashMap<String, IResourceManager> managers;
 
     public static enum Status{
       ACTIVE,
@@ -37,10 +38,10 @@ public class TransactionManager {
 
     public static class Transaction implements Serializable {
       public Status status;
-      public ArrayList<IResourceManager> rms;
+      public ArrayList<String> rms;
 
       Transaction(){
-        this.rms = new ArrayList<IResourceManager>();
+        this.rms = new ArrayList<String>();
       }
     }
 
@@ -49,6 +50,7 @@ public class TransactionManager {
         activeTransactions = new HashMap<Integer, Transaction>();
         livingTime = new Hashtable<Integer, Long>();
         ccm = new CoordinatorCrashManager();
+        managers = new HashMap<String, IResourceManager>();
         log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
         //loadFile();
     }
@@ -60,37 +62,6 @@ public class TransactionManager {
         System.out.print("Transaction Manager save file failed." + "\n");
       }
     }
-    // public void loadFile(){
-    //   try{
-    //     HashMap<Integer, Transaction> savedData = (HashMap<Integer, Transaction>) log_Transactions.read();
-    //     for(Entry<Integer, Transaction> ts: savedData.entrySet()){
-    //       xid = Math.max(xid, ts.getKey());
-    //       activeTransactions.put(ts.getKey(), ts.getValue());
-    //       switch(ts.getValue().status){
-    //         case ACTIVE:
-    //           resetTime(ts.getKey());
-    //           break;
-    //         case IN_PREPARE:
-    //           Prepare(ts.getKey());
-    //           break;
-    //         case IN_COMMIT:
-    //           Commit(ts.getKey());
-    //           break;
-    //         case IN_ABORT:
-    //           Abort(ts.getKey());
-    //           break;
-    //         default:
-    //           break;
-    //       }
-    //     }
-    //   }catch(InvalidTransactionException|TransactionAbortedException ive){
-    //     System.out.print("Found invalid or aborted transaction!");
-    //   }
-    //   catch(IOException | ClassNotFoundException e){
-    //     System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
-    //     save();
-    //   }
-    // }
     public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
       Transaction currentT = activeTransactions.get(xid);
       System.out.print("Preparing transaction with id:  " + xid + "\n");
@@ -101,18 +72,11 @@ public class TransactionManager {
         throw new InvalidTransactionException(xid, currentT.status.name());
       }
       setStatus(xid, Status.IN_PREPARE);
-      ArrayList<IResourceManager> relatedRMs = currentT.rms;
+      ArrayList<String> relatedRMs = currentT.rms;
       //ExecutorService executorService = Executors.newSingleThreadExecutor();
       boolean result = true;
-      for (IResourceManager rm : relatedRMs) {
-        try{
-          // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-          //     @Override
-          //     public Boolean call() throws Exception {
-          //       System.out.print("Sending VOTE-REQ to RM: " + rm.getName() + "\n");
-          //       return rm.Prepare(xid);
-          //     }
-          // });
+      for (String rm_name : relatedRMs) {
+          IResourceManager rm = managers.get(rm_name);
           if(!rm.Prepare(xid)){
             System.out.print("Received NO from: " + rm.getName());
             result = false;
@@ -120,31 +84,11 @@ public class TransactionManager {
           }
           //Crash after sending vote request and before receiving any replies
           ccm.after_vote_before_rec();
-
           //Crash after receiving some replies but not all
           ccm.rec_some_rep();
-          // if(!future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS)){
-          //   System.out.print("Received NO from: " + rm.getName());
-          //   result = false;
-          //   break;
-          // }
-
           //Crash after receiving all replies but before deciding
           ccm.rec_all_before_dec();
-        }catch(Exception e){
-          if(!tryflag){
-            try{
-            Thread.sleep(100);
-          }catch(Exception se){
-            System.out.print("sleep error when retry.");
-            System.exit(1);
-          }
-            Prepare(xid);
-            tryflag = true;
-          }
-          result = false;
-          break;
-        }
+
       }
       if(result){
         return Commit(xid);
@@ -157,7 +101,7 @@ public class TransactionManager {
     public boolean Abort(int xid) throws RemoteException, InvalidTransactionException {
 
         Transaction currentT = activeTransactions.get(xid);
-        if(currentT.status != Status.ACTIVE && currentT.status != Status.IN_ABORT){
+        if(currentT.status != Status.ACTIVE && currentT.status != Status.IN_ABORT && currentT.status != Status.IN_PREPARE){
           throw new InvalidTransactionException(xid, currentT.status.name());
         }
         System.out.print("Start to abort transaction with id: " + xid + "\n");
@@ -167,20 +111,13 @@ public class TransactionManager {
 
         //ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
-        ArrayList<IResourceManager> relatedRMs = currentT.rms;
+        ArrayList<String> relatedRMs = currentT.rms;
         if(relatedRMs.size() > 0){
-          for (IResourceManager rm : relatedRMs) {
+          for (String rm_name : relatedRMs) {
             try{
-              // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-              //     @Override
-              //     public Boolean call() throws Exception {
-              //       System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
-              //       return rm.Abort(xid);
-              //     }
-              // });
               //Crash after sending some but not all decisions
+              IResourceManager rm = managers.get(rm_name);
               System.out.print("Sending ABORT-REQ to RM: " + rm.getName() + "\n");
-
               ccm.send_some_dec();
               //Crash after having sent all decisions
               ccm.after_send_all_dec();
@@ -189,7 +126,7 @@ public class TransactionManager {
           }catch(Exception e){
             System.out.print("Possible crashes! Please wait." + "\n");
             resetTime(xid);
-            result = false;
+            result = true;
             break;
           }
         }
@@ -220,16 +157,10 @@ public class TransactionManager {
         //ExecutorService executorService = Executors.newSingleThreadExecutor();
         boolean result = true;
 
-        ArrayList<IResourceManager> relatedRMs = currentT.rms;
-        for (IResourceManager rm : relatedRMs) {
+        ArrayList<String> relatedRMs = currentT.rms;
+        for (String rm_name : relatedRMs) {
           try{
-            // Future<Boolean> future = executorService.submit(new Callable<Boolean>() {
-            //     @Override
-            //     public Boolean call() throws Exception {
-            //       System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
-            //       return rm.Commit(xid);
-            //     }
-            // });
+            IResourceManager rm = managers.get(rm_name);
             System.out.print("Sending COMMIT-REQ to RM: " + rm.getName() + "\n");
             //Crash after sending some but not all decisions
             ccm.send_some_dec();
@@ -275,9 +206,9 @@ public class TransactionManager {
         save();
       }
     }
-    public void addRM(int xid, IResourceManager rm) {
+    public void addRM(int xid, String rm) {
         Transaction currentT = activeTransactions.get(xid);
-        ArrayList<IResourceManager> relatedRMs = currentT.rms;
+        ArrayList<String> relatedRMs = currentT.rms;
         if(!relatedRMs.contains(rm)){
           relatedRMs.add(rm);
           currentT.rms = relatedRMs;

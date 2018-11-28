@@ -12,6 +12,7 @@ import java.rmi.RemoteException;
 import java.io.*;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.Map.Entry;
 
 @SuppressWarnings("unchecked")
 public class ResourceManager implements IResourceManager
@@ -64,7 +65,7 @@ public class ResourceManager implements IResourceManager
 		pre_images = new HashMap<Integer, P_Transaction>();
 		m_name = p_name;
 		mp = true;
-		cm = new CrashManager();
+		this.cm = new CrashManager();
 		livingTime = new Hashtable<Integer, Long>();
 
 		//Files
@@ -78,13 +79,49 @@ public class ResourceManager implements IResourceManager
 		loadData();
 		loadMaster();
 	}
+
+	public void loadFile() throws RemoteException{
+		try{
+			for(Entry<Integer, P_Transaction> ts: this.pre_images.entrySet()){
+				int current_xid  = ts.getKey();
+				P_Transaction current_PT = ts.getValue();
+				switch(current_PT.status){
+					case ACTIVE:{
+						resetTime(current_xid);
+						break;
+					}
+					case REC_COMMIT:{
+						this.Commit(current_xid);
+						break;
+					}
+					case REC_ABORT:{
+						this.Abort(current_xid);
+						break;
+					}
+					case VOTED_NO:{
+						this.Abort(current_xid);
+						break;
+					}
+					default:
+						break;
+				}
+			}
+		}catch(InvalidTransactionException|TransactionAbortedException ive){
+			System.out.print("Found invalid or aborted transaction!");
+		}
+		// catch(IOException | ClassNotFoundException e){
+		// 	System.out.print("Transaction Manager create new disk file for saving transactions now." + "\n");
+		// 	this.tm.save();
+		// }
+	}
+
 	public void resetCrashes() throws RemoteException{
 		this.cm.resetCrashes();
 		System.out.print("DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashResourceManager(String name, int mode) throws RemoteException{
 		this.cm.mode = mode;
-		System.out.print("DEBUG CRASH MODE: " + this.cm.mode + "\n");
+		System.out.print("*****DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashMiddleware(int mode) throws RemoteException{
 		//dummy;
@@ -195,8 +232,10 @@ public class ResourceManager implements IResourceManager
 			throw new InvalidTransactionException(xid);
 		}
 		P_Transaction current = pre_images.get(xid);
-		if(current.status == P_Status.COMMITED ||
-			current.status == P_Status.ABORTED ||
+		if(current.status == P_Status.COMMITED){
+			return true;
+		}
+		if(current.status == P_Status.ABORTED ||
 			current.status == P_Status.VOTED_NO ||
 			current.status == P_Status.REC_ABORT){
 			throw new InvalidTransactionException(xid);
@@ -220,7 +259,10 @@ public class ResourceManager implements IResourceManager
 			throw new InvalidTransactionException(xid);
 		}
 		P_Transaction current = pre_images.get(xid);
-		if(current.status == P_Status.COMMITED || current.status == P_Status.ABORTED){
+		if(current.status == P_Status.ABORTED){
+			return true;
+		}
+		if(current.status == P_Status.COMMITED){
 			throw new InvalidTransactionException(xid);
 		}
 		logStatus(xid, P_Status.REC_ABORT);
@@ -236,7 +278,7 @@ public class ResourceManager implements IResourceManager
 
 			//Crash after receive vote request but before sending answer
 			System.out.print("Received VOTE-REQ." + "\n");
-			cm.rec_req_before_send();
+			this.cm.rec_req_before_send();
 
 			boolean result;
 			if(!pre_images.containsKey(xid)){
@@ -263,12 +305,7 @@ public class ResourceManager implements IResourceManager
 				logStatus(xid, P_Status.VOTED_NO);
 			}
 			//Crash after sending answer
-			new Timer().schedule(new TimerTask() {
-					@Override
-					public void run() {
-						cm.after_sending();
-					}
-				}, 1);
+			cm.after_sending();
 			return result;
 	}
 

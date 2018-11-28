@@ -104,7 +104,8 @@ public class RMIResourceManager extends ResourceManager
 							continue;
 						}
 						P_Transaction current = this.pre_images.get(id);
-						if(current.status == P_Status.COMMITED || current.status == P_Status.ABORTED){
+						if(current.status == P_Status.COMMITED || current.status == P_Status.ABORTED
+						|| current.status == P_Status.VOTED_NO || current.status == P_Status.VOTED_YES){
 							continue;
 						}
 						if (System.currentTimeMillis() > this.livingTime.get(id) + this.TIMEOUT) {
