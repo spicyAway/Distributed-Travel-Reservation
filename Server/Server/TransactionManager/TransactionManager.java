@@ -173,16 +173,17 @@ public class TransactionManager {
             break;
           }
         }
-        if(result){
+        // if(result){
           setStatus(xid, Status.COMMITED);
           synchronized (livingTime) {
               livingTime.remove(xid);
           }
-        }else{
-          setStatus(xid, Status.IN_COMMIT);
-        }
+        //   }
+        // }else{
+        //   setStatus(xid, Status.IN_COMMIT);
+        // }
         //executorService.shutdown();
-        return result;
+        return true;
     }
     public int Start() {
         xid++;

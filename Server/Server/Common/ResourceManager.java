@@ -78,9 +78,14 @@ public class ResourceManager implements IResourceManager
 
 		loadData();
 		loadMaster();
+		try{
+			loadFile();
+		}catch(RemoteException e){
+			System.out.print("Recover RM error.");
+		}
 	}
 
-	public void loadFile() throws RemoteException{
+	private void loadFile() throws RemoteException{
 		try{
 			for(Entry<Integer, P_Transaction> ts: this.pre_images.entrySet()){
 				int current_xid  = ts.getKey();
@@ -91,10 +96,12 @@ public class ResourceManager implements IResourceManager
 						break;
 					}
 					case REC_COMMIT:{
+						System.out.print("Continued to Commit! Transaction: " + current_xid + "\n");
 						this.Commit(current_xid);
 						break;
 					}
 					case REC_ABORT:{
+							System.out.print("Continued to Abort! Transaction: " + current_xid + "\n");
 						this.Abort(current_xid);
 						break;
 					}
@@ -269,11 +276,12 @@ public class ResourceManager implements IResourceManager
 
 		//Crash after receiving decision but before committing/aborting
 		cm.after_rec_before_operate();
-		m_data = pre_images.remove(xid).pre_image;
+		m_data = pre_images.get(xid).pre_image;
 		logStatus(xid, P_Status.ABORTED);
 		System.out.print("Aborted Transaction with id: " + xid + "\n");
 		return true;
 	}
+
 	public boolean Prepare(int xid)throws RemoteException, TransactionAbortedException, InvalidTransactionException{
 
 			//Crash after receive vote request but before sending answer

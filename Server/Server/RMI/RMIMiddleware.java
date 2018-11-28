@@ -37,15 +37,11 @@ public class RMIMiddleware extends ResourceManager
     super(mw_name);
     this.managers = new HashMap<String, IResourceManager>();
     this.lm = new LockManager();
-  //   try{
-  //   Thread.sleep(100);
-  // }catch(Exception e){
-  //   System.out.print("sleep error. ");
-  // }
     this.tm = new TransactionManager();
     this.tm.ccm = new CoordinatorCrashManager();
     loadFile();
     printLocks();
+
   }
   public void printLocks(){
     for(int i=1; i<this.tm.xid+1; i++){
