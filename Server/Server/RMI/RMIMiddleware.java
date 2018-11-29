@@ -676,7 +676,7 @@ public class RMIMiddleware extends ResourceManager
           }
         }
       });
-      beatThread.start();
+      //beatThread.start();
 
 
 
