@@ -1,11 +1,33 @@
 package Server.Common;
-
+import java.io.IOException;
+@SuppressWarnings("unchecked")
 public class CoordinatorCrashManager{
   //This is the crash manager for participants
   public int mode;
-  public CoordinatorCrashManager(){
+  public static LogFile<Integer> log_mode;
+  public CoordinatorCrashManager(String mw_name){
     this.mode = -1;
+    this.log_mode = new LogFile(mw_name, "Logged-Crash-Mode");
+    load();
   }
+
+  public void load(){
+    try{
+      this.mode = (int) log_mode.read();
+    }catch(Exception e){
+      this.save();
+    }
+  }
+
+  public void save(){
+    try{
+      log_mode.save(mode, "debug");
+    }catch(IOException e){
+      e.printStackTrace();
+      System.out.print("Crash Manager save file failed." + "\n");
+    }
+  }
+
   public void crash(){
     System.out.print("[[[Coordinator Ready to crash]]]" + "\n");
     System.exit(1);
@@ -42,7 +64,11 @@ public class CoordinatorCrashManager{
       crash();
   }
   public void during_recovery(){
-    if(mode == 8)
+    if(mode == 8){
+    //Avoid re-crash
+      mode = -1;
+      this.save();
       crash();
+    }
   }
 }

@@ -38,17 +38,19 @@ public class RMIMiddleware extends ResourceManager
     this.managers = new HashMap<String, IResourceManager>();
     this.lm = new LockManager();
     this.tm = new TransactionManager();
-    this.tm.ccm = new CoordinatorCrashManager();
-    loadFile();
-    printLocks();
+    this.tm.ccm = new CoordinatorCrashManager(mw_name);
 
   }
+  //For debugging use
   public void printLocks(){
     for(int i=1; i<this.tm.xid+1; i++){
       System.out.print("**Debug locks: " + this.lm.info(i) + "\n");
     }
   }
   public void loadFile(){
+    System.out.print("Recover old transactions now. " + "\n");
+    //Crash during recovery
+    tm.ccm.during_recovery();
     try{
       @SuppressWarnings("unchecked")
       HashMap<Integer, TransactionManager.Transaction> savedData = (HashMap<Integer, TransactionManager.Transaction>) tm.log_Transactions.read();
@@ -56,12 +58,10 @@ public class RMIMiddleware extends ResourceManager
 
         tm.xid = Math.max(tm.xid, ts.getKey());
         tm.activeTransactions.put(ts.getKey(), ts.getValue());
-        //Crash during recovery
-        tm.ccm.during_recovery();
 
         switch(ts.getValue().status){
           case ACTIVE:{
-            this.tm.resetTime(ts.getKey());
+            this.Abort(ts.getKey());
             break;
           }
           case IN_PREPARE:{
@@ -91,7 +91,7 @@ public class RMIMiddleware extends ResourceManager
 
   public void resetCrashes() throws RemoteException{
     this.tm.ccm.mode = -1;
-    System.out.print("****DEBUG CRASH MODE: " + this.tm.ccm.mode + "\n");
+    System.out.print("*SET CRASH MODE: " + this.tm.ccm.mode + "\n");
     this.getCarManager().resetCrashes();
     this.getRoomManager().resetCrashes();
     this.getFlightManager().resetCrashes();
@@ -99,7 +99,8 @@ public class RMIMiddleware extends ResourceManager
 
   public void crashMiddleware(int mode) throws RemoteException{
     this.tm.ccm.mode = mode;
-    System.out.print("*****DEBUG CRASH MODE: " + this.tm.ccm.mode);
+    this.tm.ccm.save();
+    System.out.print("*SET CRASH MODE: " + this.tm.ccm.mode);
   }
   public void crashResourceManager(String name, int mode) throws RemoteException{
     this.managers.get(name).crashResourceManager(name, mode);
@@ -155,6 +156,7 @@ public class RMIMiddleware extends ResourceManager
       System.exit(1);
     }
   }
+  //We laster use a Hearbeat, this method is dummy
   public boolean reconnectOnce(String hostName) throws RemoteException{
     IResourceManager resourceManager_Proxy;
     try {
@@ -172,7 +174,6 @@ public class RMIMiddleware extends ResourceManager
     try {
       Registry registry = LocateRegistry.getRegistry(host_,port_);
       resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
-      //System.out.print("...Heartbeat" + hostName + "..." + "\n");
       this.managers.put(hostName, resourceManager_Proxy);
       this.tm.managers.put(hostName, resourceManager_Proxy);
       return true;
@@ -231,22 +232,22 @@ public class RMIMiddleware extends ResourceManager
     String ident = lockKey.substring(0, 3);
     switch(ident){
       case "fli":{
-        System.out.print("ADDED FLIGHT MANAGER TO TM" + "\n");
+        //System.out.print("ADDED FLIGHT MANAGER TO TM" + "\n");
         tm.addRM(xid, "Flights");
         break;
       }
       case "roo":{
-        System.out.print("ADDED ROOM MANAGER TO TM" + "\n");
+        //System.out.print("ADDED ROOM MANAGER TO TM" + "\n");
         tm.addRM(xid, "Rooms");
         break;
       }
       case "car":{
-        System.out.print("ADDED CAR MANAGER TO TM" + "\n");
+        //System.out.print("ADDED CAR MANAGER TO TM" + "\n");
         tm.addRM(xid, "Cars");
         break;
       }
       case "cus":{
-        System.out.print("ADDED ALL MANAGERS TO TM" + "\n");
+        //System.out.print("ADDED ALL MANAGERS TO TM" + "\n");
         tm.addRM(xid, "Flights");
         tm.addRM(xid, "Rooms");
         tm.addRM(xid, "Cars");
@@ -256,14 +257,8 @@ public class RMIMiddleware extends ResourceManager
   }
   //For all the following methods, request locks first then perform the operation
   public boolean addFlight(int xid, int flightNum, int flightSeats, int flightPrice)throws RemoteException, TransactionAbortedException, InvalidTransactionException
-  {
-    try{
-      Lock(xid, Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
+  {   Lock(xid, Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getFlightManager().addFlight(xid, flightNum, flightSeats, flightPrice);
-    }catch(RemoteException e){
-      this.reconnect("Flights");
-    }
-    return false;
   }
 
   public boolean addCars(int xid, String location, int count, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException
@@ -528,9 +523,9 @@ public class RMIMiddleware extends ResourceManager
     boolean noforceAbort = true;
     try{
        result = tm.Prepare(xid);
-    }catch(Exception e){
+    }catch(RemoteException e){
         try{
-            System.out.print("^^^^Waiting for recovery and try again." + "\n");
+            System.out.print("^^Waiting for recovery and try again." + "\n");
             Thread.sleep(5000);
           }catch(Exception se){
             System.out.print("sleep error when retry.");
@@ -538,7 +533,7 @@ public class RMIMiddleware extends ResourceManager
           }
         boolean uprunning = reconnectOnce("Flights") && reconnectOnce("Rooms") && reconnectOnce("Cars");
         if(uprunning){
-          System.out.print("^^^^Up running again!" + "\n");
+          System.out.print("^^Up running again!" + "\n");
           try{
             Thread.sleep(200);
             result = tm.Prepare(xid);
@@ -549,7 +544,7 @@ public class RMIMiddleware extends ResourceManager
             noforceAbort = false;
           }
         }else{
-          System.out.print("^^^^No response again!" + "\n");
+          System.out.print("^^No response again!" + "\n");
           result = Abort(xid);
           noforceAbort = false;
         }
@@ -624,6 +619,8 @@ public class RMIMiddleware extends ResourceManager
       });
       mw.connectResourceManagers(providedManagers);
       mw.EchoEM();
+      mw.loadFile();
+      //mw.printLocks();
       System.out.print("Middleware Ready!" + "\n");
 
       //Time-to-live functionality
@@ -688,14 +685,9 @@ public class RMIMiddleware extends ResourceManager
         }
         for (Integer id : tm.livingTime.keySet()) {
           TransactionManager.Transaction currentT = tm.activeTransactions.get(id);
-          if(currentT.status == TransactionManager.Status.COMMITED || currentT.status == TransactionManager.Status.ABORTED){
+          if(currentT.status == TransactionManager.Status.COMMITTED || currentT.status == TransactionManager.Status.ABORTED){
             continue;
           }
-          // if(currentT.status == TransactionManager.Status.IN_COMMIT || currentT.status == TransactionManager.Status.IN_ABORT){
-          //   if(!reconnectOnce("Flights") && reconnectOnce("Rooms") && reconnectOnce("Cars")){
-          //     resetTime(id);
-          //   }
-          // }
           if (System.currentTimeMillis() > tm.livingTime.get(id) + tm.TIMEOUT) {
             Abort(id);
             System.out.print("Time-out Transaction " + id + "\n");

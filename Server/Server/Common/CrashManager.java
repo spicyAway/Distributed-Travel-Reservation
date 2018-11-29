@@ -1,10 +1,32 @@
 package Server.Common;
+import java.io.IOException;
 
+@SuppressWarnings("unchecked")
 public class CrashManager{
   //This is the crash manager for participants
   public int mode;
-  public CrashManager(){
+  public static LogFile<Integer> log_mode;
+  public CrashManager(String rm_name){
     this.mode = -1;
+    this.log_mode = new LogFile(rm_name, "Logged-Crash-Mode");
+    load();
+  }
+  public void load(){
+    try{
+      this.mode = (int) log_mode.read();
+      //System.out.print("**DEBUG LOAD MODE: " + mode + "\n");
+    }catch(Exception e){
+      this.save();
+    }
+  }
+
+  public void save(){
+    try{
+      log_mode.save(mode, "debug");
+    }catch(IOException e){
+      e.printStackTrace();
+      System.out.print("Crash Manager save file failed." + "\n");
+    }
   }
   public void crash(){
     System.out.print("[[[Ready to crash]]]" + "\n");
@@ -30,7 +52,11 @@ public class CrashManager{
       crash();
   }
   public void during_recovery(){
-    if(mode == 5)
+    if(mode == 5){
+    //Avoid re-crash
+      mode = -1;
+      this.save();
       crash();
+    }
   }
 }

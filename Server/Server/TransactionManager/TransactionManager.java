@@ -21,7 +21,7 @@ public class TransactionManager {
     public static int xid;
     public static HashMap<Integer, Transaction> activeTransactions;
     public static Hashtable<Integer, Long> livingTime;
-    public static LogFile<HashMap<Integer, Transaction>> log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
+    public static LogFile<HashMap<Integer, Transaction>> log_Transactions;
     public CoordinatorCrashManager ccm;
     private boolean tryflag = false;
     public HashMap<String, IResourceManager> managers;
@@ -31,9 +31,8 @@ public class TransactionManager {
       IN_PREPARE,
       IN_COMMIT,
       IN_ABORT,
-      COMMITED,
-      ABORTED,
-      TIMED_OUT
+      COMMITTED,
+      ABORTED
     }
 
     public static class Transaction implements Serializable {
@@ -49,10 +48,17 @@ public class TransactionManager {
         xid = 0;
         activeTransactions = new HashMap<Integer, Transaction>();
         livingTime = new Hashtable<Integer, Long>();
-        ccm = new CoordinatorCrashManager();
+        ccm = new CoordinatorCrashManager(RMIMiddleware.mw_name);
         managers = new HashMap<String, IResourceManager>();
         log_Transactions = new LogFile(RMIMiddleware.mw_name, "Logged-Transactions");
-        //loadFile();
+        loadFile();
+    }
+    public void loadFile(){
+      try{
+        this.activeTransactions = (HashMap<Integer, Transaction>) log_Transactions.read();
+      }catch(Exception e){
+        System.out.print("Error in loading activeTransactions. " + "\n");
+      }
     }
     public void save(){
       try{
@@ -124,8 +130,7 @@ public class TransactionManager {
               //result &= future.get(RESPONSE_TIMEOUT, TimeUnit.SECONDS);
               result &= rm.Abort(xid);
           }catch(Exception e){
-            System.out.print("Possible crashes! Please wait." + "\n");
-            resetTime(xid);
+            System.out.print("Possible crashes happend." + "\n");
             result = true;
             break;
           }
@@ -173,16 +178,10 @@ public class TransactionManager {
             break;
           }
         }
-        // if(result){
-          setStatus(xid, Status.COMMITED);
+          setStatus(xid, Status.COMMITTED);
           synchronized (livingTime) {
               livingTime.remove(xid);
           }
-        //   }
-        // }else{
-        //   setStatus(xid, Status.IN_COMMIT);
-        // }
-        //executorService.shutdown();
         return true;
     }
     public int Start() {
@@ -203,7 +202,7 @@ public class TransactionManager {
     private void setStatus(int xid, Status new_status){
       if(checkAlive(xid)){
         activeTransactions.get(xid).status = new_status;
-        System.out.print("****Logged transaction " + xid + " with status: " + new_status.name() + "\n");
+        System.out.print("**Logged transaction " + xid + " with status: " + new_status.name() + "\n");
         save();
       }
     }
@@ -213,6 +212,8 @@ public class TransactionManager {
         if(!relatedRMs.contains(rm)){
           relatedRMs.add(rm);
           currentT.rms = relatedRMs;
+          activeTransactions.put(xid, currentT);
+          save();
         }
     }
     public int getXid() {
@@ -222,12 +223,7 @@ public class TransactionManager {
     public boolean checkAlive(int id) {
         return activeTransactions.containsKey(id);
     }
-    //
-    // public void setXid(int id) {
-    //     xid = id;
-    //     ArrayList<IResourceManager> relatedRMs = new ArrayList<IResourceManager>();
-    //     activeTransactions.get(id).rms = relatedRMs;
-    // }
+
     public void resetTime(int xid) {
         synchronized (livingTime) {
             livingTime.put(xid, System.currentTimeMillis());

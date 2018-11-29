@@ -24,7 +24,7 @@ public class ResourceManager implements IResourceManager
 	protected Map<Integer, P_Transaction> pre_images;
 	public CrashManager cm;
 	public static Hashtable<Integer, Long> livingTime;
-	public static long TIMEOUT = 100000; //In milliseconds
+	public static long TIMEOUT = 50000; //In milliseconds
 
 	//Files wrote into disk
 	protected DiskFile<RMHashMap> dataT;
@@ -65,7 +65,7 @@ public class ResourceManager implements IResourceManager
 		pre_images = new HashMap<Integer, P_Transaction>();
 		m_name = p_name;
 		mp = true;
-		this.cm = new CrashManager();
+		this.cm = new CrashManager(p_name);
 		livingTime = new Hashtable<Integer, Long>();
 
 		//Files
@@ -86,26 +86,32 @@ public class ResourceManager implements IResourceManager
 	}
 
 	private void loadFile() throws RemoteException{
+		System.out.print("Recover old transactions now. " + "\n");
+		//crash during during_recovery
+		this.cm.during_recovery();
 		try{
 			for(Entry<Integer, P_Transaction> ts: this.pre_images.entrySet()){
 				int current_xid  = ts.getKey();
 				P_Transaction current_PT = ts.getValue();
 				switch(current_PT.status){
 					case ACTIVE:{
-						resetTime(current_xid);
+						// System.out.print("Abort active transaction: " + current_xid + "\n");
+						// this.Abort(current_xid);
+						this.resetTime(current_xid);
 						break;
 					}
 					case REC_COMMIT:{
-						System.out.print("Continued to Commit! Transaction: " + current_xid + "\n");
+						System.out.print("Continued to commit transaction: " + current_xid + "\n");
 						this.Commit(current_xid);
 						break;
 					}
 					case REC_ABORT:{
-							System.out.print("Continued to Abort! Transaction: " + current_xid + "\n");
+						System.out.print("Continued to abort transaction: " + current_xid + "\n");
 						this.Abort(current_xid);
 						break;
 					}
 					case VOTED_NO:{
+						System.out.print("Continued to abort transaction: " + current_xid + "\n");
 						this.Abort(current_xid);
 						break;
 					}
@@ -124,11 +130,13 @@ public class ResourceManager implements IResourceManager
 
 	public void resetCrashes() throws RemoteException{
 		this.cm.resetCrashes();
-		System.out.print("DEBUG CRASH MODE: " + this.cm.mode + "\n");
+		this.cm.save();
+		System.out.print("**DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashResourceManager(String name, int mode) throws RemoteException{
 		this.cm.mode = mode;
-		System.out.print("*****DEBUG CRASH MODE: " + this.cm.mode + "\n");
+		this.cm.save();
+		System.out.print("**DEBUG CRASH MODE: " + this.cm.mode + "\n");
 	}
 	public void crashMiddleware(int mode) throws RemoteException{
 		//dummy;
@@ -227,7 +235,7 @@ public class ResourceManager implements IResourceManager
 			pre_image.status = new_status;
 			this.pre_images.put(xid, pre_image);
 			log();
-			System.out.print("******Logged transaction: " + xid + " with status: " + new_status + "\n");
+			System.out.print("**Logged transaction: " + xid + " with status: " + new_status + "\n");
 		}
 	}
 
@@ -263,6 +271,7 @@ public class ResourceManager implements IResourceManager
 
 		System.out.print("Received ABORT-REQ." + "\n");
 		if(!pre_images.containsKey(xid)){
+			System.out.print("Invalid transaction found." +"\n");
 			throw new InvalidTransactionException(xid);
 		}
 		P_Transaction current = pre_images.get(xid);
