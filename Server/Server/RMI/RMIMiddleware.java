@@ -219,8 +219,8 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     try{
-      tm.resetTime(xid);
       boolean lock_result = this.lm.Lock(xid, lockKey, type);
+      tm.resetTime(xid);
       //this.saveLocks();
       this.lm.saveFile();
       AddManagers(xid, lockKey);
@@ -654,7 +654,6 @@ public class RMIMiddleware extends ResourceManager
       timeThread.start();
 
       //Hearbeat functionality
-      //Time-to-live functionality
       Thread beatThread = new Thread(new Runnable(){
         @Override
         public void run() {

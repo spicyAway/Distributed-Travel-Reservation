@@ -57,7 +57,8 @@ public class TransactionManager {
       try{
         this.activeTransactions = (HashMap<Integer, Transaction>) log_Transactions.read();
       }catch(Exception e){
-        System.out.print("Error in loading activeTransactions. " + "\n");
+        System.out.print("Creating new log of Transactions file. " + "\n");
+        this.save();
       }
     }
     public void save(){

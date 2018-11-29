@@ -37,6 +37,7 @@ public class LockManager implements Serializable
 			this.waitTable = (TPHashTable) saved_waitTable.read();
 		}catch(IOException | ClassNotFoundException e){
 			System.out.print("---Create new log file: Locks now.---" + "\n");
+			this.saveFile();
 		}
 	}
 
