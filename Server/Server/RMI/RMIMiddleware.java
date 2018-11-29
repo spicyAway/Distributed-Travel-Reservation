@@ -598,7 +598,9 @@ public class RMIMiddleware extends ResourceManager
       providedAddresses[2] = args[5];
 
     }else{
-      System.out.print("DEBUG LENGTH: " + args.length + "\n");
+      for(int i=0 ; i<args.length; i++){
+        System.out.print("DEBUG: " + args[i] + "\n");
+      }
       System.out.println("Required usage: [firstResourceManager] [address1] [secondResourceManager] [address2] [thirdResourceManager] [address3] ");
       System.exit(1);
     }
