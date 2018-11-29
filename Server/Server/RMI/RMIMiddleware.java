@@ -23,7 +23,7 @@ public class RMIMiddleware extends ResourceManager
   public static int managerSize = 3;
   public static String mw_name = "group34_Middleware";
   private static String s_rmiPrefix = "group34_";
-  private static String host_ = "localhost";
+  private static Map<String, String> addresses;
   private static int port_ = 1099;
   private static String[] types = new String[]{"Flights", "Cars", "Rooms"};
   private LockManager lm;
@@ -36,6 +36,7 @@ public class RMIMiddleware extends ResourceManager
   {
     super(mw_name);
     this.managers = new HashMap<String, IResourceManager>();
+    this.addresses = new HashMap<String, String>();
     this.lm = new LockManager();
     this.tm = new TransactionManager();
     this.tm.ccm = new CoordinatorCrashManager(mw_name);
@@ -107,15 +108,17 @@ public class RMIMiddleware extends ResourceManager
   }
 
   //Connect to the resource managers provided by the user
-  public void connectResourceManagers (String[] resourceManagers) throws RemoteException{
+  public void connectResourceManagers (String[] resourceManagers, String[] providedAddresses) throws RemoteException{
 
     IResourceManager resourceManager_Proxy;
 
     for(int i=0; i<managerSize; i++){
       try {
         String hostName = resourceManagers[i];
+        String address = providedAddresses[i];
+        this.addresses.put(hostName, address);
         //Registry registry = LocateRegistry.getRegistry(hostName,port_);
-        Registry registry = LocateRegistry.getRegistry(host_,port_);
+        Registry registry = LocateRegistry.getRegistry(address,port_);
       //  System.out.print("Get the registry successfully!----------" + "\n");
         resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + types[i]);
         System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
@@ -135,6 +138,7 @@ public class RMIMiddleware extends ResourceManager
       boolean first = true;
       while (true) {
         try {
+          String host_ = this.addresses.get(hostName);
           Registry registry = LocateRegistry.getRegistry(host_,port_);
           resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
           System.out.print("Reconnect from " + hostName + " successfully!" + "\n");
@@ -160,6 +164,7 @@ public class RMIMiddleware extends ResourceManager
   public boolean reconnectOnce(String hostName) throws RemoteException{
     IResourceManager resourceManager_Proxy;
     try {
+      String host_ = this.addresses.get(hostName);
       Registry registry = LocateRegistry.getRegistry(host_,port_);
       resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
       System.out.print("Reconnect: " + hostName + " successfully!" + "\n");
@@ -172,6 +177,7 @@ public class RMIMiddleware extends ResourceManager
   public boolean Heartbeat(String hostName) throws RemoteException{
     IResourceManager resourceManager_Proxy;
     try {
+      String host_ = this.addresses.get(hostName);
       Registry registry = LocateRegistry.getRegistry(host_,port_);
       resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + hostName);
       this.managers.put(hostName, resourceManager_Proxy);
@@ -578,14 +584,21 @@ public class RMIMiddleware extends ResourceManager
   public static void main(String args[]) throws RemoteException
   {
     String[] providedManagers = new String[managerSize];
+    String[] providedAddresses = new String[managerSize];
     String server = "localhost";
-    if (args.length == managerSize)
+    if (args.length == managerSize * 2)
     {
       providedManagers[0] = args[0];
-      providedManagers[1] = args[1];
-      providedManagers[2] = args[2];
+      providedAddresses[0] = args[1];
+
+      providedManagers[1] = args[2];
+      providedAddresses[1] = args[3];
+
+      providedManagers[2] = args[4];
+      providedAddresses[2] = args[5];
+
     }else{
-      System.out.println("Required usage: [firstResourceManager] [secondResourceManager] [thirdResourceManager] ");
+      System.out.println("Required usage: [firstResourceManager] [address1] [secondResourceManager] [address2] [thirdResourceManager] [address3] ");
       System.exit(1);
     }
     // Create the RMI middleware entry
@@ -617,7 +630,7 @@ public class RMIMiddleware extends ResourceManager
           }
         }
       });
-      mw.connectResourceManagers(providedManagers);
+      mw.connectResourceManagers(providedManagers, providedAddresses);
       mw.EchoEM();
       mw.loadFile();
       //mw.printLocks();
@@ -654,7 +667,7 @@ public class RMIMiddleware extends ResourceManager
                   System.out.print("Lost Connection error." + "\n");
                   }
                 }
-              },1000,1000);
+              },2000,2000);
           }catch (Exception e){
             System.out.print("Heartbeat error." + "\n");
           }
