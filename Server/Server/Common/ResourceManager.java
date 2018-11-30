@@ -333,19 +333,13 @@ public class ResourceManager implements IResourceManager
 	{
 		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
-				System.out.print("b1\n");
-				System.out.print(System.currentTimeMillis() + "\n");
 				P_Transaction transaction_data = new P_Transaction();
 				resetTime(xid);
 				pre_images.put(xid, transaction_data);
-				System.out.print("b1end\n");
-				System.out.print(System.currentTimeMillis() + "\n");
 			}
 			P_Transaction transaction_data = pre_images.get(xid);
 			RMHashMap pre_image = transaction_data.pre_image;
 			if(!pre_image.containsKey(key)){
-				System.out.print("b2\n");
-				System.out.print(System.currentTimeMillis() + "\n");
 				if(!m_data.containsKey(key)){
 					pre_image.put(key, null);
 				}else{
@@ -356,16 +350,9 @@ public class ResourceManager implements IResourceManager
 				pre_images.put(xid, transaction_data);
 				m_data.put(key, value);
 			}
-			System.out.print("b2end\n");
-			System.out.print(System.currentTimeMillis() + "\n");
 		}
-		System.out.print("b3\n");
-		System.out.print(System.currentTimeMillis() + "\n");
-
 		this.resetTime(xid);
-		System.out.print(System.currentTimeMillis() + "\n");
 		log();
-		System.out.print(System.currentTimeMillis() + "\n");
 	}
 
 	// Remove the item out of storage

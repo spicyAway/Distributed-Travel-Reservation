@@ -219,24 +219,11 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     try{
-      System.out.print("b1" +"\n");
-      System.out.print(System.currentTimeMillis() + "\n");
-
       boolean lock_result = this.lm.Lock(xid, lockKey, type);
-
-      System.out.print("b2" +"\n");
-      System.out.print(System.currentTimeMillis() + "\n");
-
       tm.resetTime(xid);
-
-      System.out.print("b3" +"\n");
-      System.out.print(System.currentTimeMillis() + "\n");
       //this.saveLocks();
       //this.lm.saveFile();
       AddManagers(xid, lockKey);
-
-      System.out.print("b4" +"\n");
-      System.out.print(System.currentTimeMillis() + "\n");
 
       if (!lock_result) {
         Abort(xid);
