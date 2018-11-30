@@ -49,7 +49,7 @@ public class RMIMiddleware extends ResourceManager
     }
   }
   public void loadFile(){
-    System.out.print("Recover old transactions now. " + "\n");
+    //System.out.print("Recover old transactions now. " + "\n");
     //Crash during recovery
     tm.ccm.during_recovery();
     try{
@@ -121,7 +121,7 @@ public class RMIMiddleware extends ResourceManager
         Registry registry = LocateRegistry.getRegistry(address,port_);
       //  System.out.print("Get the registry successfully!----------" + "\n");
         resourceManager_Proxy = (IResourceManager)registry.lookup(s_rmiPrefix + types[i]);
-        System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
+        //System.out.print("Get the proxy from " + hostName + " successfully!" + "\n");
         this.managers.put(types[i], resourceManager_Proxy);
         this.tm.managers.put(types[i], resourceManager_Proxy);
       }
@@ -689,7 +689,7 @@ public class RMIMiddleware extends ResourceManager
           }
         }
       });
-      //beatThread.start();
+      beatThread.start();
 
     }catch (Exception e) {
       System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
@@ -706,7 +706,7 @@ public class RMIMiddleware extends ResourceManager
   //Check if any transactions should be timed out
   public void countingTime()throws RemoteException, TransactionAbortedException, InvalidTransactionException {
     while (true) {
-      synchronized(tm.livingTime){
+      // synchronized(tm.livingTime){
         if(tm.livingTime.isEmpty()){
           continue;
         }
@@ -719,7 +719,7 @@ public class RMIMiddleware extends ResourceManager
             Abort(id);
             System.out.print("Time-out Transaction " + id + "\n");
           }
-        }
+      //  }
       try {
         Thread.sleep(100);
       }catch(Exception e){

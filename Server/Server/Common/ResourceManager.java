@@ -331,7 +331,7 @@ public class ResourceManager implements IResourceManager
 	// Writes a data item
 	protected void writeData(int xid, String key, RMItem value)
 	{
-	//	synchronized(m_data) {
+		synchronized(m_data) {
 			if(!pre_images.containsKey(xid)){
 				System.out.print("b1\n");
 				System.out.print(System.currentTimeMillis() + "\n");
@@ -358,7 +358,7 @@ public class ResourceManager implements IResourceManager
 			}
 			System.out.print("b2end\n");
 			System.out.print(System.currentTimeMillis() + "\n");
-	//	}
+		}
 		System.out.print("b3\n");
 		System.out.print(System.currentTimeMillis() + "\n");
 

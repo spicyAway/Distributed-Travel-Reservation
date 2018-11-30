@@ -56,13 +56,19 @@ public abstract class Client
 					execute(cmd, arguments);
 				}
 			}
-			catch (IllegalArgumentException|ServerException e) {
+			catch (IllegalArgumentException e) {
+				System.out.print("Possible crashes happened, please try again later." + "\n");
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0m" + e.getLocalizedMessage());
 			}
+			catch (ServerException e){
+				System.out.print("Possible crashes happened, please try again later." + "\n");
+			}
 			catch (ConnectException|UnmarshalException e) {
+				System.out.print("Possible crashes happened, please try again later." + "\n");
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mConnection to server lost");
 			}
 			catch (Exception e) {
+				System.out.print("Possible crashes happened, please try again later." + "\n");
 				System.err.println((char)27 + "[31;1mCommand exception: " + (char)27 + "[0mUncaught exception");
 				e.printStackTrace();
 			}
@@ -86,7 +92,6 @@ public abstract class Client
 				case Start: {
 					System.out.print("Start a new transaction now" + "\n");
 					int xid = m_resourceManager.Start();
-					//activeTransactions.add(xid);
 					System.out.print("Your xid is: " + xid + "\n");
 					break;
 				}
@@ -135,7 +140,7 @@ public abstract class Client
 					if (result) {
 						System.out.print("Commit successfully for transaction: " + xid);
 					} else {
-						System.out.print("Commit error!");
+						System.out.print("Commit error! Possible Failure occured! " + "\n");
 					}
 					break;
 //				}
@@ -486,6 +491,8 @@ public abstract class Client
 			System.out.print("Transaction " + e.getXId() + " aborted, everything undone, please try again.");
 		} catch (InvalidTransactionException e) {
 			System.out.print("Transaction " + e.getXId() + " invalid, everything Undone, please try again.");
+		} catch (RemoteException re){
+			System.out.print("Connection to the Resource Manager might be lost, please try again later.");
 		}
 	}
 
