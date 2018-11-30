@@ -95,7 +95,7 @@ public class RMIResourceManager extends ResourceManager
 
 	public void countingTime()throws RemoteException, TransactionAbortedException, InvalidTransactionException {
 			while (true) {
-				synchronized(this.livingTime){
+				//synchronized(this.livingTime){
 					if(this.livingTime.isEmpty()){
 						continue;
 					}
@@ -112,7 +112,7 @@ public class RMIResourceManager extends ResourceManager
 							this.Abort(id);
 							System.out.print("Time-out Transaction " + id + "\n");
 						}
-					}
+				//	}
 				try {
 					Thread.sleep(100);
 				}catch(Exception e){
