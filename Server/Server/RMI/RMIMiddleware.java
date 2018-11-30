@@ -270,132 +270,77 @@ public class RMIMiddleware extends ResourceManager
 
   public boolean addCars(int xid, String location, int count, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid, Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getCarManager().addCars(xid, location, count, price);
-    }catch(RemoteException e){
-      this.reconnect("Cars");
-    }
-    return false;
   }
 
   public boolean addRooms(int xid, String location, int count, int price) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getRoomManager().addRooms(xid, location, count, price);
-    }catch(RemoteException e){
-      this.reconnect("Rooms");
-    }
-    return false;
   }
 
   // Deletes flight
   public boolean deleteFlight(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getFlightManager().deleteFlight(xid, flightNum);
-    }catch(RemoteException e){
-      this.reconnect("Flights");
-    }
-    return false;
   }
 
   // Delete cars at a location
   public boolean deleteCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getCarManager().deleteCars(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Cars");
-    }
-    return false;
   }
 
   // Delete rooms at a location
   public boolean deleteRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_WRITE);
       return this.getRoomManager().deleteRooms(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Rooms");
-    }
-    return false;
   }
 
   // Returns the number of empty seats in this flight
   public int queryFlight(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
       return this.getFlightManager().queryFlight(xid, flightNum);
-    }catch(RemoteException e){
-      this.reconnect("Flights");
-    }
-    return -1;
   }
 
   // Returns the number of cars available at a location
   public int queryCars(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
       return this.getCarManager().queryCars(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Cars");
-    }
-    return -1;
   }
 
   // Returns the amount of rooms available at a location
   public int queryRooms(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
-    {
-    try{
+  {
       Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
       return this.getRoomManager().queryRooms(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Rooms");
-    }
-    return -1;
   }
 
   // Returns price of a seat in this flight
   public int queryFlightPrice(int xid, int flightNum) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Flight.getKey(flightNum), TransactionLockObject.LockType.LOCK_READ);
       return this.getFlightManager().queryFlightPrice(xid, flightNum);
-    }catch(RemoteException e){
-      this.reconnect("Flights");
-    }
-    return -1;
   }
 
   // Returns price of cars at this location
   public int queryCarsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Car.getKey(location), TransactionLockObject.LockType.LOCK_READ);
       return this.getCarManager().queryCarsPrice(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Cars");
-    }
-    return -1;
   }
 
   // Returns room price at this location
   public int queryRoomsPrice(int xid, String location) throws RemoteException, TransactionAbortedException, InvalidTransactionException
   {
-    try{
       Lock(xid,Room.getKey(location), TransactionLockObject.LockType.LOCK_READ);
       return this.getRoomManager().queryRoomsPrice(xid, location);
-    }catch(RemoteException e){
-      this.reconnect("Rooms");
-    }
-    return -1;
   }
 
   public String queryCustomerInfo(int xid, int customerID) throws RemoteException, TransactionAbortedException, InvalidTransactionException
