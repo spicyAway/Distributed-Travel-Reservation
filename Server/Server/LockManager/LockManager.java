@@ -17,44 +17,44 @@ public class LockManager implements Serializable
 	private static TPHashTable stampTable = new TPHashTable(LockManager.TABLE_SIZE);
 	private static TPHashTable waitTable = new TPHashTable(LockManager.TABLE_SIZE);
 
-	private static DiskFile<TPHashTable> saved_lockTable;
-	private static DiskFile<TPHashTable> saved_stampTable;
-	private static DiskFile<TPHashTable> saved_waitTable;
+	// private static DiskFile<TPHashTable> saved_lockTable;
+	// private static DiskFile<TPHashTable> saved_stampTable;
+	// private static DiskFile<TPHashTable> saved_waitTable;
 
 	public LockManager()
 	{
 		super();
-		saved_lockTable = new DiskFile<TPHashTable>(mw_name, "saved_lockTable");
-		saved_stampTable = new DiskFile<TPHashTable>(mw_name, "saved_stampTable");
-		saved_waitTable = new DiskFile<TPHashTable>(mw_name, "saved_waitTable");
-		loadFile();
+		// saved_lockTable = new DiskFile<TPHashTable>(mw_name, "saved_lockTable");
+		// saved_stampTable = new DiskFile<TPHashTable>(mw_name, "saved_stampTable");
+		// saved_waitTable = new DiskFile<TPHashTable>(mw_name, "saved_waitTable");
+		// loadFile();
 	}
 
-	public void loadFile(){
-		try{
-			this.lockTable = (TPHashTable) saved_lockTable.read();
-			this.stampTable = (TPHashTable) saved_stampTable.read();
-			this.waitTable = (TPHashTable) saved_waitTable.read();
-			System.out.print("successfully read in logs. " + "\n"); 
-		}catch(IOException | ClassNotFoundException e){
-			System.out.print("---Create new log file: Locks now.---" + "\n");
-			this.saveFile();
-		}
-	}
+	// public void loadFile(){
+	// 	try{
+	// 		this.lockTable = (TPHashTable) saved_lockTable.read();
+	// 		this.stampTable = (TPHashTable) saved_stampTable.read();
+	// 		this.waitTable = (TPHashTable) saved_waitTable.read();
+	// 		System.out.print("successfully read in logs. " + "\n");
+	// 	}catch(IOException | ClassNotFoundException e){
+	// 		System.out.print("---Create new log file: Locks now.---" + "\n");
+	// 		this.saveFile();
+	// 	}
+	// }
 
-	public void saveFile(){
-		try{
-			//System.out.print("Logging data: " + log_data.filePath + "\n");
-			System.out.print("Saving locks." + "\n");
-			saved_lockTable.save(lockTable);
-			saved_stampTable.save(stampTable);
-			saved_waitTable.save(waitTable);
-
-		}catch(IOException e){
-			e.printStackTrace();
-			System.out.print("Saving locks failed :(");
-		}
-	}
+	// public void saveFile(){
+	// 	try{
+	// 		//System.out.print("Logging data: " + log_data.filePath + "\n");
+	// 		System.out.print("Saving locks." + "\n");
+	// 		saved_lockTable.save(lockTable);
+	// 		saved_stampTable.save(stampTable);
+	// 		saved_waitTable.save(waitTable);
+	//
+	// 	}catch(IOException e){
+	// 		e.printStackTrace();
+	// 		System.out.print("Saving locks failed :(");
+	// 	}
+	// }
 
 	public boolean Lock(int xid, String data, TransactionLockObject.LockType lockType) throws DeadlockException
 	{

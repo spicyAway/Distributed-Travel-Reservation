@@ -219,11 +219,25 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     try{
+      System.out.print("b1" +"\n");
+      System.out.print(System.currentTimeMillis() + "\n");
+
       boolean lock_result = this.lm.Lock(xid, lockKey, type);
+
+      System.out.print("b2" +"\n");
+      System.out.print(System.currentTimeMillis() + "\n");
+
       tm.resetTime(xid);
+
+      System.out.print("b3" +"\n");
+      System.out.print(System.currentTimeMillis() + "\n");
       //this.saveLocks();
-      this.lm.saveFile();
+      //this.lm.saveFile();
       AddManagers(xid, lockKey);
+
+      System.out.print("b4" +"\n");
+      System.out.print(System.currentTimeMillis() + "\n");
+
       if (!lock_result) {
         Abort(xid);
         throw new TransactionAbortedException(xid);
@@ -519,7 +533,7 @@ public class RMIMiddleware extends ResourceManager
     result = tm.Abort(xid);
     if(result){
       lm.UnlockAll(xid);
-      this.lm.saveFile();
+      //this.lm.saveFile();
     }
   //  this.saveLocks();
     return result;
@@ -558,7 +572,7 @@ public class RMIMiddleware extends ResourceManager
     //If successfully aborted or commited , release the locks
     if(result){
       lm.UnlockAll(xid);
-      this.lm.saveFile();
+      //this.lm.saveFile();
     }
     return result && noforceAbort;
   }
@@ -567,7 +581,7 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     boolean result = Prepare(xid) && lm.UnlockAll(xid);
-    this.lm.saveFile();
+    //this.lm.saveFile();
     return result;
     //this.saveLocks();
   }
@@ -576,7 +590,7 @@ public class RMIMiddleware extends ResourceManager
       throw new InvalidTransactionException(xid);
     }
     boolean result = tm.Commit(xid) && lm.UnlockAll(xid);
-    this.lm.saveFile();
+    //this.lm.saveFile();
     return result;
     //this.saveLocks();
   }
@@ -676,8 +690,6 @@ public class RMIMiddleware extends ResourceManager
         }
       });
       //beatThread.start();
-
-
 
     }catch (Exception e) {
       System.err.println((char)27 + "[31;1mServer exception: " + (char)27 + "[0mUncaught exception");
