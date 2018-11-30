@@ -24,7 +24,7 @@ public class ResourceManager implements IResourceManager
 	protected Map<Integer, P_Transaction> pre_images;
 	public CrashManager cm;
 	public Hashtable<Integer, Long> livingTime;
-	public static long TIMEOUT = 100000; //In milliseconds
+	public static long TIMEOUT = 50000; //In milliseconds
 
 	//Files wrote into disk
 	protected DiskFile<RMHashMap> dataT;
@@ -148,7 +148,7 @@ public class ResourceManager implements IResourceManager
 			this.pre_images = (Map<Integer, P_Transaction>) log_images.read();
 			return true;
 		}catch(IOException | ClassNotFoundException e){
-			System.out.print("---Create new log file: Data now.---" + "\n");
+			//System.out.print("---Create new log file: Data now.---" + "\n");
 			return log();
 		}
 	}
@@ -157,7 +157,7 @@ public class ResourceManager implements IResourceManager
 			this.mp = (Boolean) master_file.read();
 			return true;
 		}catch(IOException | ClassNotFoundException e){
-			System.out.print("---Create new log file: Master now.---" + "\n");
+			//System.out.print("---Create new log file: Master now.---" + "\n");
 			return log();
 		}
 	}

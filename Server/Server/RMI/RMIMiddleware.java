@@ -193,7 +193,7 @@ public class RMIMiddleware extends ResourceManager
       String echoMessage = this.getFlightManager().getName() + " ";
       echoMessage += this.getCarManager().getName() + " ";
       echoMessage += this.getRoomManager().getName() + " ";
-      System.out.print("The active resource managers are: " + echoMessage + "\n");
+      //System.out.print("The active resource managers are: " + echoMessage + "\n");
     }catch (Exception e) {
       System.err.println("Echo exception: " + e.toString());
       e.printStackTrace();
